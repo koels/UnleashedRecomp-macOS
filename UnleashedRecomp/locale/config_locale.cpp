@@ -661,6 +661,139 @@ CONFIG_DEFINE_LOCALE(UnfocusedFPS)
 };
 
 // Japanese Notes: This localization should include furigana.
+CONFIG_DEFINE_LOCALE(Key_A)
+{
+    { ELanguage::English, { "A Button", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_B)
+{
+    { ELanguage::English, { "B Button", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_X)
+{
+    { ELanguage::English, { "X Button", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_Y)
+{
+    { ELanguage::English, { "Y Button", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_LeftBumper)
+{
+    { ELanguage::English, { "Left Bumper", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_RightBumper)
+{
+    { ELanguage::English, { "Right Bumper", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_LeftTrigger)
+{
+    { ELanguage::English, { "Left Trigger", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_RightTrigger)
+{
+    { ELanguage::English, { "Right Trigger", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_Start)
+{
+    { ELanguage::English, { "Start", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_Back)
+{
+    { ELanguage::English, { "Back", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_LeftStickUp)
+{
+    { ELanguage::English, { "Left Stick Up", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_LeftStickDown)
+{
+    { ELanguage::English, { "Left Stick Down", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_LeftStickLeft)
+{
+    { ELanguage::English, { "Left Stick Left", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_LeftStickRight)
+{
+    { ELanguage::English, { "Left Stick Right", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_RightStickUp)
+{
+    { ELanguage::English, { "Right Stick Up", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_RightStickDown)
+{
+    { ELanguage::English, { "Right Stick Down", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_RightStickLeft)
+{
+    { ELanguage::English, { "Right Stick Left", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_RightStickRight)
+{
+    { ELanguage::English, { "Right Stick Right", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_DPadUp)
+{
+    { ELanguage::English, { "D-Pad Up", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_DPadDown)
+{
+    { ELanguage::English, { "D-Pad Down", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_DPadLeft)
+{
+    { ELanguage::English, { "D-Pad Left", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Key_DPadRight)
+{
+    { ELanguage::English, { "D-Pad Right", "Select, then press the keyboard key to use for this button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(LowPowerFPS)
+{
+    { ELanguage::English, { "Low Power FPS", "Set the max frame rate while macOS Low Power Mode is on, to extend battery life." } }
+};
+
+CONFIG_DEFINE_LOCALE(GraphicsProfile)
+{
+    { ELanguage::English, { "Graphics Preset", "Apply a preset to resolution scale, anti-aliasing, shadows, GI texture filtering and motion blur.\n\nShows Custom when those settings don't match a preset." } }
+};
+
+CONFIG_DEFINE_ENUM_LOCALE(EGraphicsProfile)
+{
+    {
+        ELanguage::English,
+        {
+            { EGraphicsProfile::Custom,      { "CUSTOM", "Custom: your own combination of settings. Selecting this changes nothing." } },
+            { EGraphicsProfile::Performance, { "PERFORMANCE", "Performance: 75% resolution scale, no anti-aliasing, original shadows and bilinear GI filtering. Best for battery and older Macs." } },
+            { EGraphicsProfile::Balanced,    { "BALANCED", "Balanced: the default settings." } },
+            { EGraphicsProfile::Quality,     { "QUALITY", "Quality: 8x MSAA where supported, 8192 shadows and enhanced motion blur." } }
+        }
+    }
+};
+
 CONFIG_DEFINE_LOCALE(Brightness)
 {
     { ELanguage::English,  { "Brightness", "Adjust the brightness level until the symbol on the left is barely visible." } },

@@ -11,10 +11,14 @@
 #include <app.h>
 #include <ui/game_window.h>
 #include <exports.h>
+#include <res/whats_new.h>
+#include <user/config.h>
+#include <version.h>
 
 static bool g_installMessageOpen = false;
 static bool g_installMessageFaderBegun = false;
 static int g_installMessageResult = -1;
+static int g_whatsNewMessageResult = -1;
 
 static bool ProcessInstallMessage()
 {
@@ -49,11 +53,46 @@ static bool ProcessInstallMessage()
     return true;
 }
 
+// Shows the release notes once after updating. A fresh install has nothing to compare
+// against, so it just records the version without showing anything.
+static bool ProcessWhatsNewMessage()
+{
+    static bool s_isOpen = []()
+    {
+        if (Config::LastSeenVersion.Value == g_versionString)
+            return false;
+
+        // Language is always written to config.toml, so it only loads if the file existed.
+        bool isUpdate = Config::Language.IsLoadedFromConfig;
+
+        Config::LastSeenVersion = g_versionString;
+        Config::Save();
+
+        // Releases with nothing player-facing leave the notes empty and skip the popup.
+        return isUpdate && *g_whatsNew;
+    }();
+
+    if (!s_isOpen)
+        return false;
+
+    if (MessageWindow::Open(g_whatsNew, &g_whatsNewMessageResult) == MSG_CLOSED)
+    {
+        s_isOpen = false;
+        g_whatsNewMessageResult = -1;
+    }
+
+    return true;
+}
+
 // SWA::CTitleStateMenu::Update
 PPC_FUNC_IMPL(__imp__sub_825882B8);
 PPC_FUNC(sub_825882B8)
 {
     GameWindow::s_lastTitleTime = App::s_time;
+
+    // Shown after PRESS START, before the menu takes any input.
+    if (ProcessWhatsNewMessage())
+        return;
 
     auto pTitleStateMenu = (SWA::CTitleStateMenu*)g_memory.Translate(ctx.r3.u32);
     auto pGameDocument = SWA::CGameDocument::GetInstance();

@@ -374,6 +374,14 @@ CONFIG_DEFINE_ENUM_TEMPLATE(EMotionBlur)
     { "Enhanced", EMotionBlur::Enhanced }
 };
 
+CONFIG_DEFINE_ENUM_TEMPLATE(EGraphicsProfile)
+{
+    { "Custom",      EGraphicsProfile::Custom },
+    { "Performance", EGraphicsProfile::Performance },
+    { "Balanced",    EGraphicsProfile::Balanced },
+    { "Quality",     EGraphicsProfile::Quality }
+};
+
 CONFIG_DEFINE_ENUM_TEMPLATE(ECutsceneAspectRatio)
 {
     { "Original", ECutsceneAspectRatio::Original },
@@ -752,8 +760,128 @@ std::filesystem::path Config::GetConfigPath()
     return GetUserPath() / "config.toml";
 }
 
+extern CONFIG_LOCALE g_Key_A_locale;
+extern CONFIG_LOCALE g_Key_B_locale;
+extern CONFIG_LOCALE g_Key_X_locale;
+extern CONFIG_LOCALE g_Key_Y_locale;
+extern CONFIG_LOCALE g_Key_LeftBumper_locale;
+extern CONFIG_LOCALE g_Key_RightBumper_locale;
+extern CONFIG_LOCALE g_Key_LeftTrigger_locale;
+extern CONFIG_LOCALE g_Key_RightTrigger_locale;
+extern CONFIG_LOCALE g_Key_Start_locale;
+extern CONFIG_LOCALE g_Key_Back_locale;
+extern CONFIG_LOCALE g_Key_LeftStickUp_locale;
+extern CONFIG_LOCALE g_Key_LeftStickDown_locale;
+extern CONFIG_LOCALE g_Key_LeftStickLeft_locale;
+extern CONFIG_LOCALE g_Key_LeftStickRight_locale;
+extern CONFIG_LOCALE g_Key_RightStickUp_locale;
+extern CONFIG_LOCALE g_Key_RightStickDown_locale;
+extern CONFIG_LOCALE g_Key_RightStickLeft_locale;
+extern CONFIG_LOCALE g_Key_RightStickRight_locale;
+extern CONFIG_LOCALE g_Key_DPadUp_locale;
+extern CONFIG_LOCALE g_Key_DPadDown_locale;
+extern CONFIG_LOCALE g_Key_DPadLeft_locale;
+extern CONFIG_LOCALE g_Key_DPadRight_locale;
+
+extern void VideoConfigValueChangedCallback(class IConfigDef* config);
+
+struct GraphicsProfileValues
+{
+    float ResolutionScale;
+    EAntiAliasing AntiAliasing;
+    bool TransparencyAntiAliasing;
+    EShadowResolution ShadowResolution;
+    EGITextureFiltering GITextureFiltering;
+    EMotionBlur MotionBlur;
+};
+
+// Balanced matches the config defaults, so a fresh install reads as Balanced.
+static const std::map<EGraphicsProfile, GraphicsProfileValues> g_graphicsProfiles =
+{
+    { EGraphicsProfile::Performance, { 0.75f, EAntiAliasing::None,   false, EShadowResolution::Original, EGITextureFiltering::Bilinear, EMotionBlur::Original } },
+    { EGraphicsProfile::Balanced,    { 1.0f,  EAntiAliasing::MSAA4x, true,  EShadowResolution::x4096,    EGITextureFiltering::Bicubic,  EMotionBlur::Original } },
+    { EGraphicsProfile::Quality,     { 1.0f,  EAntiAliasing::MSAA8x, true,  EShadowResolution::x8192,    EGITextureFiltering::Bicubic,  EMotionBlur::Enhanced } }
+};
+
+EGraphicsProfile Config::DetectGraphicsProfile()
+{
+    for (auto& [profile, values] : g_graphicsProfiles)
+    {
+        // Compare against what applying the profile would actually give on this hardware.
+        // Same downward walk as SnapToNearestAccessibleValue(false).
+        auto& aaValues = Config::AntiAliasing.EnumTemplateReverse;
+        auto aaIt = aaValues.find(values.AntiAliasing);
+        while (aaIt != aaValues.begin() && Config::AntiAliasing.InaccessibleValues.contains(aaIt->first))
+            --aaIt;
+
+        auto antiAliasing = aaIt->first;
+
+        if (Config::ResolutionScale == values.ResolutionScale &&
+            Config::AntiAliasing == antiAliasing &&
+            Config::TransparencyAntiAliasing == values.TransparencyAntiAliasing &&
+            Config::ShadowResolution == values.ShadowResolution &&
+            Config::GITextureFiltering == values.GITextureFiltering &&
+            Config::MotionBlur == values.MotionBlur)
+        {
+            return profile;
+        }
+    }
+
+    return EGraphicsProfile::Custom;
+}
+
 void Config::CreateCallbacks()
 {
+    // Display names for the keyboard bindings in the Options menu.
+    Config::Key_A.Locale = &g_Key_A_locale;
+    Config::Key_B.Locale = &g_Key_B_locale;
+    Config::Key_X.Locale = &g_Key_X_locale;
+    Config::Key_Y.Locale = &g_Key_Y_locale;
+    Config::Key_LeftBumper.Locale = &g_Key_LeftBumper_locale;
+    Config::Key_RightBumper.Locale = &g_Key_RightBumper_locale;
+    Config::Key_LeftTrigger.Locale = &g_Key_LeftTrigger_locale;
+    Config::Key_RightTrigger.Locale = &g_Key_RightTrigger_locale;
+    Config::Key_Start.Locale = &g_Key_Start_locale;
+    Config::Key_Back.Locale = &g_Key_Back_locale;
+    Config::Key_LeftStickUp.Locale = &g_Key_LeftStickUp_locale;
+    Config::Key_LeftStickDown.Locale = &g_Key_LeftStickDown_locale;
+    Config::Key_LeftStickLeft.Locale = &g_Key_LeftStickLeft_locale;
+    Config::Key_LeftStickRight.Locale = &g_Key_LeftStickRight_locale;
+    Config::Key_RightStickUp.Locale = &g_Key_RightStickUp_locale;
+    Config::Key_RightStickDown.Locale = &g_Key_RightStickDown_locale;
+    Config::Key_RightStickLeft.Locale = &g_Key_RightStickLeft_locale;
+    Config::Key_RightStickRight.Locale = &g_Key_RightStickRight_locale;
+    Config::Key_DPadUp.Locale = &g_Key_DPadUp_locale;
+    Config::Key_DPadDown.Locale = &g_Key_DPadDown_locale;
+    Config::Key_DPadLeft.Locale = &g_Key_DPadLeft_locale;
+    Config::Key_DPadRight.Locale = &g_Key_DPadRight_locale;
+
+    Config::GraphicsProfile.ApplyCallback = [](ConfigDef<EGraphicsProfile>* def)
+    {
+        auto it = g_graphicsProfiles.find(def->Value);
+
+        // Custom is just a label for "doesn't match a preset"; picking it changes nothing.
+        if (it == g_graphicsProfiles.end())
+            return;
+
+        auto& values = it->second;
+
+        Config::ResolutionScale = values.ResolutionScale;
+        Config::AntiAliasing = values.AntiAliasing;
+        Config::AntiAliasing.SnapToNearestAccessibleValue(false);
+        Config::TransparencyAntiAliasing = values.TransparencyAntiAliasing;
+        Config::ShadowResolution = values.ShadowResolution;
+        Config::GITextureFiltering = values.GITextureFiltering;
+        Config::MotionBlur = values.MotionBlur;
+
+        // Same follow-up the Options menu runs when each of these is changed by hand.
+        VideoConfigValueChangedCallback(&Config::ResolutionScale);
+        VideoConfigValueChangedCallback(&Config::AntiAliasing);
+        VideoConfigValueChangedCallback(&Config::TransparencyAntiAliasing);
+        VideoConfigValueChangedCallback(&Config::ShadowResolution);
+        VideoConfigValueChangedCallback(&Config::GITextureFiltering);
+    };
+
     Config::WindowSize.LockCallback = [](ConfigDef<int32_t>* def)
     {
         // Try matching the current window size with a known configuration.

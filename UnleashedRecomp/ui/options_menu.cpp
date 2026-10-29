@@ -76,6 +76,19 @@ static bool g_rightWasHeld;
 static bool g_downWasHeld;
 
 static bool g_lockedOnOption;
+
+// Keyboard rebinding. Keys are let go of before listening starts and after a key
+// is bound, so neither the key that opened the capture nor the new one acts on the menu.
+enum class EKeyCapture
+{
+    None,
+    WaitForReleaseBefore,
+    Listening,
+    WaitForReleaseAfter
+};
+
+static ConfigDef<SDL_Scancode>* g_capturingKey;
+static EKeyCapture g_keyCapture;
 static double g_lockedOnTime;
 static double g_lastTappedTime;
 static double g_lastIncrementTime;
@@ -452,6 +465,8 @@ static std::string& GetCategory(int index)
 
 static void ResetSelection()
 {
+    g_capturingKey = nullptr;
+    g_keyCapture = EKeyCapture::None;
     g_firstVisibleRowIndex = 0;
     g_selectedRowIndex = 0;
     g_prevSelectedRowIndex = 0;
@@ -792,6 +807,72 @@ static void DrawSelectionArrows(ImVec2 min, ImVec2 max, bool isLeftTapped, bool 
     SetAdditive(false);
 }
 
+static bool IsAnyKeyDown()
+{
+    int count;
+    auto keys = SDL_GetKeyboardState(&count);
+
+    for (int i = 0; i < count; i++)
+    {
+        if (keys[i])
+            return true;
+    }
+
+    return false;
+}
+
+// Runs while a binding row is capturing. Holds the menu's lock throughout, so row,
+// tab and close navigation all stay blocked until the capture ends.
+static void UpdateKeyCapture()
+{
+    switch (g_keyCapture)
+    {
+        case EKeyCapture::None:
+            return;
+
+        case EKeyCapture::WaitForReleaseBefore:
+            if (!IsAnyKeyDown())
+                g_keyCapture = EKeyCapture::Listening;
+
+            return;
+
+        case EKeyCapture::WaitForReleaseAfter:
+            if (!IsAnyKeyDown())
+            {
+                g_keyCapture = EKeyCapture::None;
+                g_capturingKey = nullptr;
+                g_lockedOnOption = false;
+            }
+
+            return;
+
+        case EKeyCapture::Listening:
+            break;
+    }
+
+    int count;
+    auto keys = SDL_GetKeyboardState(&count);
+
+    if (keys[SDL_SCANCODE_ESCAPE] || g_mouseRightClicked)
+    {
+        Game_PlaySound("sys_worldmap_cansel");
+    }
+    else
+    {
+        auto it = std::find_if(g_capturingKey->EnumTemplateReverse.begin(), g_capturingKey->EnumTemplateReverse.end(),
+            [&](auto& entry) { return entry.first != SDL_SCANCODE_UNKNOWN && entry.first < count && keys[entry.first]; });
+
+        // Only keys the config file can store are accepted.
+        if (it == g_capturingKey->EnumTemplateReverse.end())
+            return;
+
+        g_capturingKey->Value = it->first;
+        Game_PlaySound("sys_worldmap_finaldecide");
+    }
+
+    g_keyCapture = EKeyCapture::WaitForReleaseAfter;
+}
+
 template<typename T>
 static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* config,
     bool isAccessible, std::string* inaccessibleReason = nullptr,
@@ -851,7 +932,19 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
         {
             if (isAccessible)
             {
-                if constexpr (std::is_same_v<T, bool>)
+                if constexpr (std::is_same_v<T, SDL_Scancode>)
+                {
+                    if (isAcceptTapped && !g_capturingKey)
+                    {
+                        g_capturingKey = config;
+                        g_keyCapture = EKeyCapture::WaitForReleaseBefore;
+                        g_lockedOnOption = true;
+                        g_lockedOnTime = ImGui::GetTime();
+
+                        Game_PlaySound("sys_worldmap_decide");
+                    }
+                }
+                else if constexpr (std::is_same_v<T, bool>)
                 {
                     if (isAcceptTapped)
                     {
@@ -914,7 +1007,7 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
                     lockedOnOption = g_lockedOnOption;
                 }
 
-                if (g_canReset && padState.IsTapped(SWA::eKeyState_X))
+                if (g_canReset && !g_capturingKey && padState.IsTapped(SWA::eKeyState_X))
                 {
                     if (!config->IsDefaultValue())
                     {
@@ -1236,9 +1329,16 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
         {
             valueText = fmt::format("{}", config->Value);
 
-            if (isSlider && config->Value >= valueMax)
+            // Low Power FPS tops out at a real 60, not "unlimited".
+            if (isSlider && config->Value >= valueMax && config != &Config::LowPowerFPS)
                 valueText = Localise("Options_Value_Max");
         }
+    }
+    else if constexpr (std::is_same_v<T, SDL_Scancode>)
+    {
+        valueText = g_capturingKey == config && g_keyCapture != EKeyCapture::WaitForReleaseAfter
+            ? "PRESS A KEY"
+            : config->GetValueLocalised(Config::Language);
     }
     else
     {
@@ -1286,6 +1386,8 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
 
 static void DrawConfigOptions()
 {
+    UpdateKeyCapture();
+
     auto drawList = ImGui::GetBackgroundDrawList();
     auto clipRectMin = drawList->GetClipRectMin();
     auto clipRectMax = drawList->GetClipRectMax();
@@ -1322,6 +1424,28 @@ static void DrawConfigOptions()
             DrawConfigOption(rowCount++, yOffset, &Config::Vibration, true);
             DrawConfigOption(rowCount++, yOffset, &Config::AllowBackgroundInput, true);
             DrawConfigOption(rowCount++, yOffset, &Config::ControllerIcons, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_A, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_B, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_X, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_Y, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftBumper, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightBumper, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftTrigger, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightTrigger, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_Start, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_Back, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickUp, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickDown, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickLeft, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickRight, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickUp, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickDown, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickLeft, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickRight, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadUp, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadDown, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadLeft, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadRight, true);
             break;
 
         case 2: // AUDIO
@@ -1354,6 +1478,12 @@ static void DrawConfigOptions()
 
             DrawConfigOption(rowCount++, yOffset, &Config::Monitor, canChangeMonitor, monitorReason, 0, 0, displayCount - 1, false);
 
+            // Derived from the individual settings, except while the player is scrolling through it.
+            // g_selectedItem is cleared every frame before rows draw, so match on the row index instead.
+            if (!(g_lockedOnOption && g_selectedRowIndex == rowCount))
+                Config::GraphicsProfile.Value = Config::DetectGraphicsProfile();
+
+            DrawConfigOption(rowCount++, yOffset, &Config::GraphicsProfile, true);
             DrawConfigOption(rowCount++, yOffset, &Config::AspectRatio, true);
             DrawConfigOption(rowCount++, yOffset, &Config::ResolutionScale, true, nullptr, 0.25f, 1.0f, 2.0f);
             DrawConfigOption(rowCount++, yOffset, &Config::Fullscreen, true);
@@ -1364,6 +1494,9 @@ static void DrawConfigOptions()
             DrawConfigOption(rowCount++, yOffset, &Config::VSync, true);
             DrawConfigOption(rowCount++, yOffset, &Config::FPS, true, nullptr, FPS_MIN, 120, FPS_MAX);
             DrawConfigOption(rowCount++, yOffset, &Config::UnfocusedFPS, true, nullptr, FPS_MIN, 30, FPS_MAX);
+#ifdef __APPLE__
+            DrawConfigOption(rowCount++, yOffset, &Config::LowPowerFPS, true, nullptr, 30, 45, 60, true);
+#endif
             DrawConfigOption(rowCount++, yOffset, &Config::Brightness, true);
             DrawConfigOption(rowCount++, yOffset, &Config::AntiAliasing, Config::AntiAliasing.InaccessibleValues.size() != 3, &Localise("Options_Desc_NotAvailableHardware"));
             DrawConfigOption(rowCount++, yOffset, &Config::TransparencyAntiAliasing, Config::AntiAliasing != EAntiAliasing::None, &Localise("Options_Desc_NotAvailableMSAA"));

@@ -103,6 +103,7 @@ elseif (APPLE)
         "os/macos/fullscreen_macos.mm"
         "os/macos/logger_macos.cpp"
         "os/macos/media_macos.cpp"
+        "os/macos/power_macos.mm"
         "os/macos/process_macos.cpp"
         "os/macos/user_macos.cpp"
         "os/macos/version_macos.cpp"

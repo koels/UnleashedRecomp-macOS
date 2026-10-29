@@ -144,6 +144,14 @@ enum class ECutsceneAspectRatio : uint32_t
     Unlocked
 };
 
+enum class EGraphicsProfile : uint32_t
+{
+    Custom,
+    Performance,
+    Balanced,
+    Quality
+};
+
 enum class EUIAlignmentMode : uint32_t
 {
     Edge,
@@ -230,6 +238,9 @@ public:
     static std::filesystem::path GetConfigPath();
 
     static void CreateCallbacks();
+
+    // The preset whose values match the current graphics settings, or Custom.
+    static EGraphicsProfile DetectGraphicsProfile();
     static void Load();
     static void Save();
 };

@@ -16,6 +16,8 @@ out/build/macos-release/Sparkle-2.6.4/bin/generate_keys --account unleashed-reco
 
 1. Bump the version in `UnleashedRecomp/res/version.txt`. Sparkle compares versions, so it must increase.
 
+   Rewrite `UnleashedRecomp/res/whats_new.h` with this release's changes. Players see it once on the title screen after updating, so keep it to a few short plain-text lines. For a release that's only generic bug fixes, set it to `""` and no popup is shown.
+
 2. Configure and build:
 
 ```bash

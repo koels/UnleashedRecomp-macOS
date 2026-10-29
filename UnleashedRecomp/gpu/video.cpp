@@ -27,6 +27,9 @@
 #include <ui/options_menu.h>
 #include <ui/game_window.h>
 #include <ui/black_bar.h>
+#ifdef __APPLE__
+#include <os/macos/power_macos.h>
+#endif
 #include <patches/aspect_ratio_patches.h>
 #include <user/config.h>
 #include <sdl_listener.h>
@@ -2865,6 +2868,15 @@ void Video::Present()
     int32_t fps = Config::FPS;
     if (!GameWindow::s_isFocused && Config::UnfocusedFPS >= FPS_MIN && Config::UnfocusedFPS < FPS_MAX)
         fps = (fps >= FPS_MIN && fps < FPS_MAX) ? std::min(fps, Config::UnfocusedFPS.Value) : Config::UnfocusedFPS.Value;
+
+#ifdef __APPLE__
+    if (os::macos::IsLowPowerMode())
+    {
+        // Always capped in Low Power Mode, between 30 and 60.
+        int32_t lowPowerFPS = std::clamp(Config::LowPowerFPS.Value, 30, 60);
+        fps = (fps >= FPS_MIN && fps < FPS_MAX) ? std::min(fps, lowPowerFPS) : lowPowerFPS;
+    }
+#endif
 
     if (fps >= FPS_MIN && fps < FPS_MAX)
     {
