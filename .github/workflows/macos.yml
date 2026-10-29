@@ -1,0 +1,50 @@
+name: macOS
+
+# The full app can't be built here: it needs game files from your own copy, which must never be
+# uploaded. This checks everything that can be verified without them.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Configure and build tools
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install dependencies
+        run: brew install ninja
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./thirdparty/vcpkg/downloads
+            ./thirdparty/vcpkg/packages
+          key: vcpkg-macos-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-macos-
+
+      # Configuring applies thirdparty-patches/ to SDL, imgui and plume, and fails if one no longer applies.
+      - name: Configure
+        run: cmake . --preset macos-release
+
+      - name: Build recompiler tools
+        run: cmake --build ./out/build/macos-release --target XenonRecomp XenosRecomp
+
+      - name: Check game file extraction script
+        run: python3 -m py_compile tools/macos/extract_game_files.py
