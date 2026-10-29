@@ -46,7 +46,20 @@ ditto -c -k --keepParent "out/build/macos-release/UnleashedRecomp/Unleashed Reco
 out/build/macos-release/Sparkle-2.6.4/bin/generate_appcast --account unleashed-recomp-macos --download-url-prefix "https://github.com/koels/UnleashedRecomp-macOS/releases/download/<tag>/" <folder with zips>
 ```
 
-6. Create a GitHub release for the tag and attach the zip and `appcast.xml`. The feed URL always resolves to the latest release's `appcast.xml`, so keep every past version in the folder from step 5 so the appcast lists them all.
+   Then fix two things `generate_appcast` gets wrong before uploading:
+
+   - **Delta names.** It names deltas `Unleashed Recompiled<new>-<old>.delta`, with a space. GitHub replaces the space with a dot on upload, so the `%20` links in the appcast would 404. Rename each new delta to `Unleashed.Recompiled<new>-<old>.delta` and change `Unleashed%20Recompiled` to `Unleashed.Recompiled` in their URLs.
+   - **Older versions' zip URLs.** It points every older version's zip at the new `<tag>` too. Change each one back to its own release, e.g. `.../download/v1.0.5/UnleashedRecomp-macOS-v1.0.5.zip`. Older deltas keep their correct URLs.
+
+   The signatures cover each file's contents, not its name or URL, so these edits don't need re-signing. `generate_appcast` also warns about mismatched code signing identities between versions; that's expected with ad-hoc signing.
+
+6. Create a GitHub release for the tag and attach the zip, the new deltas and `appcast.xml`. The feed URL always resolves to the latest release's `appcast.xml`, so keep every past version in the folder from step 5 so the appcast lists them all.
+
+7. Check that every URL in the uploaded appcast returns 200:
+
+```bash
+for u in $(grep -o 'url="[^"]*"' appcast.xml | cut -d'"' -f2); do echo "$(curl -sIL -o /dev/null -w '%{http_code}' "$u") $u"; done
+```
 
 ## Game code and assets
 
