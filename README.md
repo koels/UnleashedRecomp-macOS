@@ -14,6 +14,9 @@ An unofficial, macOS-focused fork of [Unleashed Recompiled](https://github.com/h
 
 This fork is not affiliated with SEGA or with hedge-dev. All credit for the recompilation itself goes to the [original authors](docs/UPSTREAM_README.md#credits).
 
+> [!NOTE]
+> **AI-assisted.** Parts of this fork's macOS changes (code, patches and documentation) were written with the help of an AI coding assistant (Claude), then reviewed and tested on real hardware. The original Unleashed Recompiled project is the work of its authors and is unaffected by this note.
+
 ## What's Different on macOS
 
 - **In-game updates.** New versions are announced on the title screen and installed through [Sparkle](https://sparkle-project.org).
