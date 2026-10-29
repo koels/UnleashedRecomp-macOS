@@ -9,6 +9,7 @@
 #include <user/achievement_manager.h>
 #include <user/paths.h>
 #include <app.h>
+#include <ui/game_window.h>
 #include <exports.h>
 
 static bool g_installMessageOpen = false;
@@ -52,6 +53,8 @@ static bool ProcessInstallMessage()
 PPC_FUNC_IMPL(__imp__sub_825882B8);
 PPC_FUNC(sub_825882B8)
 {
+    GameWindow::s_lastTitleTime = App::s_time;
+
     auto pTitleStateMenu = (SWA::CTitleStateMenu*)g_memory.Translate(ctx.r3.u32);
     auto pGameDocument = SWA::CGameDocument::GetInstance();
 

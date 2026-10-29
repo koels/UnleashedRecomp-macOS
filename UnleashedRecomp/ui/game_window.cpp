@@ -4,8 +4,13 @@
 #include <os/user.h>
 #include <os/version.h>
 #include <app.h>
+#include <ui/options_menu.h>
 #include <sdl_listener.h>
 #include <SDL_syswm.h>
+#ifdef __APPLE__
+#include <os/macos/fullscreen_macos.h>
+#include <plume_apple.h>
+#endif
 
 #if _WIN32
 #include <dwmapi.h>
@@ -179,6 +184,10 @@ void GameWindow::Init(const char* sdlVideoDriver)
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 #endif
 
+#ifdef __APPLE__
+    os::macos::SetFullscreenMenuBar(Config::FullscreenMenuBar);
+#endif
+
     s_x = Config::WindowX;
     s_y = Config::WindowY;
     s_width = Config::WindowWidth;
@@ -193,7 +202,7 @@ void GameWindow::Init(const char* sdlVideoDriver)
     s_pWindow = SDL_CreateWindow("Unleashed Recompiled", s_x, s_y, s_width, s_height, GetWindowFlags());
 
     if (IsFullscreen())
-        SDL_ShowCursor(SDL_DISABLE);
+        SDL_ShowCursor(s_isFullscreenCursorVisible ? SDL_ENABLE : SDL_DISABLE);
 
     SetDisplay(Config::Monitor);
     SetIcon();
@@ -247,6 +256,16 @@ void GameWindow::Update()
 
     if (g_needsResize)
         s_isChangingDisplay = false;
+
+    // Show the cursor everywhere except during gameplay. Gameplay is reported every frame
+    // by the pause HUD update, so a short gap means a menu, loading screen or title is up.
+    // The pause HUD also updates behind the title screen, so rule that out explicitly.
+    s_isGameplay = (App::s_time - s_lastGameplayTime) < 0.25 &&
+        (App::s_time - s_lastTitleTime) >= 0.25 &&
+        !OptionsMenu::s_isVisible;
+
+    if (s_isGameplay == s_isFullscreenCursorVisible)
+        SetFullscreenCursorVisibility(!s_isGameplay);
 }
 
 SDL_Surface* GameWindow::GetIconSurface(void* pIconBmp, size_t iconSize)
@@ -262,6 +281,11 @@ SDL_Surface* GameWindow::GetIconSurface(void* pIconBmp, size_t iconSize)
 
 void GameWindow::SetIcon(void* pIconBmp, size_t iconSize)
 {
+#ifdef __APPLE__
+    // The bundle .icns already provides a correctly shaped Dock icon; a runtime bitmap would replace it with a square.
+    return;
+#endif
+
     if (auto icon = GetIconSurface(pIconBmp, iconSize))
     {
         SDL_SetWindowIcon(s_pWindow, icon);
@@ -426,7 +450,11 @@ void GameWindow::ResetDimensions()
 
 uint32_t GameWindow::GetWindowFlags()
 {
-    uint32_t flags = SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+    uint32_t flags = SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE;
+
+#ifndef __APPLE__
+    flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
 
     if (Config::WindowState == EWindowState::Maximised)
         flags |= SDL_WINDOW_MAXIMIZED;
@@ -482,6 +510,61 @@ void GameWindow::SetDisplay(int displayIndex)
         ResetDimensions();
     }
 }
+
+#ifdef __APPLE__
+const std::vector<std::pair<int, int>>& GameWindow::GetFullscreenResolutions()
+{
+    static std::vector<std::pair<int, int>> s_resolutions;
+    static int s_key = -1;
+
+    int pointsW, pointsH;
+    SDL_GetWindowSize(s_pWindow, &pointsW, &pointsH);
+
+    // Rebuild when the HiDPI setting or the window (screen) size changes.
+    int key = (pointsW * 2 + Config::HighDPI) * 65536 + pointsH;
+    if (key == s_key)
+        return s_resolutions;
+
+    s_key = key;
+
+    double nativeScale = Config::HighDPI ? os::macos::GetBackingScale(s_renderWindow.window) : 1.0;
+    std::pair<int, int> native = { int(round(pointsW * nativeScale)), int(round(pointsH * nativeScale)) };
+
+    s_resolutions = { native };
+
+    for (int width : os::macos::GetDisplayModeWidths(s_renderWindow.window, Config::HighDPI))
+    {
+        // Heights follow the window's aspect ratio, as that's what is rendered.
+        if (width != native.first)
+            s_resolutions.emplace_back(width, int(round(double(width) * pointsH / pointsW)));
+    }
+
+    return s_resolutions;
+}
+
+void GameWindow::UpdateOutputScale()
+{
+    double backingScale = os::macos::GetBackingScale(s_renderWindow.window);
+    double scale = Config::HighDPI ? backingScale : 1.0;
+
+    if (Config::Fullscreen && Config::FullscreenResolution > 0)
+    {
+        auto& resolutions = GetFullscreenResolutions();
+
+        if (Config::FullscreenResolution < resolutions.size())
+        {
+            // Scale by width; the height follows the window's aspect ratio (which excludes the notch).
+            int pointsW, pointsH;
+            SDL_GetWindowSize(s_pWindow, &pointsW, &pointsH);
+            scale = double(resolutions[Config::FullscreenResolution].first) / pointsW;
+        }
+    }
+
+    // The swapchain picks up the new scale on its next resize check.
+    plume::CocoaWindow::scaleOverride = scale;
+    os::macos::SetOutputScale(s_renderWindow.view, scale);
+}
+#endif
 
 std::vector<SDL_DisplayMode> GameWindow::GetDisplayModes(bool ignoreInvalidModes, bool ignoreRefreshRates)
 {

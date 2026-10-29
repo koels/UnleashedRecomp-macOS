@@ -19,6 +19,11 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 project("UnleashedRecomp-ALL")
 
+# macOS app identity and updates. Leave the Sparkle values empty to build without update checks.
+set(UNLEASHED_RECOMP_BUNDLE_ID "io.github.koels.UnleashedRecomp" CACHE STRING "macOS bundle identifier")
+set(UNLEASHED_RECOMP_SPARKLE_FEED_URL "" CACHE STRING "Sparkle appcast URL")
+set(UNLEASHED_RECOMP_SPARKLE_PUBLIC_KEY "" CACHE STRING "Sparkle EdDSA public key (from generate_keys)")
+
 if (APPLE)
     enable_language(OBJC OBJCXX)
 endif()
@@ -39,6 +44,26 @@ if (UNLEASHED_RECOMP_ARCHITECTURE STREQUAL "x86_64" OR UNLEASHED_RECOMP_ARCHITEC
         -march=sandybridge
     )
 endif()
+
+# macOS fixes to submodules live as patches in thirdparty-patches/ and are applied once here.
+foreach(PATCH_NAME SDL imgui plume)
+    set(PATCH_FILE "${CMAKE_SOURCE_DIR}/thirdparty-patches/${PATCH_NAME}.patch")
+    set(PATCH_DIR "${UNLEASHED_RECOMP_THIRDPARTY_ROOT}/${PATCH_NAME}")
+
+    execute_process(COMMAND git apply --reverse --check "${PATCH_FILE}"
+        WORKING_DIRECTORY "${PATCH_DIR}" RESULT_VARIABLE PATCH_ALREADY_APPLIED OUTPUT_QUIET ERROR_QUIET)
+
+    if (NOT PATCH_ALREADY_APPLIED EQUAL 0)
+        execute_process(COMMAND git apply "${PATCH_FILE}"
+            WORKING_DIRECTORY "${PATCH_DIR}" RESULT_VARIABLE PATCH_RESULT)
+
+        if (NOT PATCH_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to apply ${PATCH_FILE}. Run 'git submodule update' to reset ${PATCH_DIR} and configure again.")
+        endif()
+
+        message(STATUS "Applied ${PATCH_NAME}.patch")
+    endif()
+endforeach()
 
 add_subdirectory(${UNLEASHED_RECOMP_THIRDPARTY_ROOT})
 add_subdirectory(${UNLEASHED_RECOMP_TOOLS_ROOT})

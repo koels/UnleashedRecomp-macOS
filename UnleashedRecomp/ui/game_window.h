@@ -22,7 +22,14 @@ public:
 
     static inline bool s_isFocused;
     static inline bool s_isIconNight;
-    static inline bool s_isFullscreenCursorVisible;
+    static inline bool s_isFullscreenCursorVisible = true;
+
+    // Last App::s_time at which actual gameplay (stage running, not paused) was observed.
+    static inline double s_lastGameplayTime = -1.0;
+    static inline bool s_isGameplay = false;
+
+    // Last App::s_time at which the title screen (intro, autosave notice or menu) was updating.
+    static inline double s_lastTitleTime = -1.0;
     static inline bool s_isChangingDisplay;
 
     static SDL_Surface* GetIconSurface(void* pIconBmp, size_t iconSize);
@@ -45,6 +52,12 @@ public:
     static int GetDisplay();
     static void SetDisplay(int displayIndex);
     static std::vector<SDL_DisplayMode> GetDisplayModes(bool ignoreInvalidModes = true, bool ignoreRefreshRates = true);
+#ifdef __APPLE__
+    // Fullscreen output resolutions: index 0 is native for the HiDPI setting, then the screen's
+    // HiDPI or 1x display modes (matching the HiDPI setting), largest first.
+    static const std::vector<std::pair<int, int>>& GetFullscreenResolutions();
+    static void UpdateOutputScale();
+#endif
     static int FindNearestDisplayMode();
     static bool IsPositionValid();
     static void Init(const char* sdlVideoDriver = nullptr);

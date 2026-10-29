@@ -99,6 +99,7 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Linux")
     )
 elseif (APPLE)
     set(UNLEASHED_RECOMP_OS_CXX_SOURCES
+        "os/macos/fullscreen_macos.mm"
         "os/macos/logger_macos.cpp"
         "os/macos/media_macos.cpp"
         "os/macos/process_macos.cpp"
@@ -177,6 +178,12 @@ set(UNLEASHED_RECOMP_INSTALL_CXX_SOURCES
     "install/hashes/spagonia.cpp"
     "install/hashes/update.cpp"
 )
+
+# On macOS updates go through Sparkle instead of the GitHub releases check.
+if (APPLE)
+    list(REMOVE_ITEM UNLEASHED_RECOMP_INSTALL_CXX_SOURCES "install/update_checker.cpp")
+    list(APPEND UNLEASHED_RECOMP_INSTALL_CXX_SOURCES "install/update_checker_macos.mm")
+endif()
 
 set(UNLEASHED_RECOMP_USER_CXX_SOURCES
     "user/achievement_data.cpp"
@@ -308,7 +315,7 @@ elseif (APPLE)
     set_target_properties(UnleashedRecomp PROPERTIES
         OUTPUT_NAME "Unleashed Recompiled"
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/res/macos/MacOSXBundleInfo.plist.in
-        MACOSX_BUNDLE_GUI_IDENTIFIER hedge-dev.UnleashedRecomp
+        MACOSX_BUNDLE_GUI_IDENTIFIER ${UNLEASHED_RECOMP_BUNDLE_ID}
         MACOSX_BUNDLE_BUNDLE_NAME "Unleashed Recompiled"
         MACOSX_BUNDLE_BUNDLE_VERSION ${MACOS_BUNDLE_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${MACOS_BUNDLE_VERSION}
@@ -341,6 +348,27 @@ elseif (APPLE)
     add_custom_target(CopyMoltenVK DEPENDS ${MVK_ICD_DST} ${MVK_DYLIB_DST})
     add_dependencies(CopyMoltenVK MoltenVK)
     add_dependencies(UnleashedRecomp CopyMoltenVK)
+
+    # Sparkle (in-game updates). Fetched from its official release and embedded in Contents/Frameworks.
+    set(SPARKLE_VERSION "2.6.4")
+    set(SPARKLE_ROOT "${CMAKE_BINARY_DIR}/Sparkle-${SPARKLE_VERSION}")
+
+    if (NOT EXISTS "${SPARKLE_ROOT}/Sparkle.framework")
+        file(DOWNLOAD
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+            "${SPARKLE_ROOT}.tar.xz"
+            EXPECTED_HASH SHA256=50612a06038abc931f16011d7903b8326a362c1074dabccb718404ce8e585f0b)
+        file(ARCHIVE_EXTRACT INPUT "${SPARKLE_ROOT}.tar.xz" DESTINATION "${SPARKLE_ROOT}")
+    endif()
+
+    target_compile_options(UnleashedRecomp PRIVATE "-F${SPARKLE_ROOT}")
+    target_link_options(UnleashedRecomp PRIVATE "-F${SPARKLE_ROOT}" "-Wl,-rpath,@executable_path/../Frameworks")
+    target_link_libraries(UnleashedRecomp PRIVATE "-framework Sparkle")
+
+    # ditto keeps the framework's symlinks intact, which plain copies would break.
+    add_custom_command(TARGET UnleashedRecomp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:UnleashedRecomp>/Frameworks"
+        COMMAND ditto "${SPARKLE_ROOT}/Sparkle.framework" "$<TARGET_BUNDLE_CONTENT_DIR:UnleashedRecomp>/Frameworks/Sparkle.framework")
 else()
     add_executable(UnleashedRecomp ${UNLEASHED_RECOMP_CXX_SOURCES})
 endif()

@@ -1698,6 +1698,10 @@ bool Video::CreateHostDevice(const char *sdlVideoDriver, bool graphicsApiRetry)
     interfaceFunctions.push_back(CreateVulkanInterfaceWrapper);
 #endif
 
+#ifdef __APPLE__
+    GameWindow::UpdateOutputScale();
+#endif
+
     for (size_t i = 0; i < interfaceFunctions.size(); i++)
     {
         RenderInterfaceFunction* interfaceFunction = interfaceFunctions[i];
@@ -2548,8 +2552,12 @@ static void DrawImGui()
     // we can adjust the mouse events before ImGui processes them.
     uint32_t width = g_swapChain->getWidth();
     uint32_t height = g_swapChain->getHeight();
-    float mousePosScaleX = float(width) / float(GameWindow::s_width);
-    float mousePosScaleY = float(height) / float(GameWindow::s_height);
+    // Query the live window size (in points) since s_width/s_height are not
+    // updated for programmatic size changes (maximise, fullscreen, HiDPI).
+    int windowWidth, windowHeight;
+    SDL_GetWindowSize(GameWindow::s_pWindow, &windowWidth, &windowHeight);
+    float mousePosScaleX = float(width) / float(windowWidth);
+    float mousePosScaleY = float(height) / float(windowHeight);
     float mousePosOffsetX = (width - Video::s_viewportWidth) / 2.0f;
     float mousePosOffsetY = (height - Video::s_viewportHeight) / 2.0f;
     for (int i = 0; i < io.Ctx->InputEventsQueue.Size; i++)

@@ -673,7 +673,11 @@ std::unordered_map<std::string_view, std::unordered_map<ELanguage, std::string>>
         // Japanese Notes: This localization should include furigana.
         "Title_Message_UpdateAvailable",
         {
+#ifdef __APPLE__
+            { ELanguage::English,  "An update is available!\n\nWould you like to\ninstall it now?" },
+#else
             { ELanguage::English,  "An update is available!\n\nWould you like to visit the\nreleases page to download it?" },
+#endif
             { ELanguage::Japanese, "アップデートが[利用:りよう][可能:かのう]です\n\nリリースページにアクセスして\nダウンロードしますか？" },
             { ELanguage::German,   "Ein Update ist verfügbar!\n\nMöchtest du die Release-Seite\nbesuchen um es herunterzuladen?" },
             { ELanguage::French,   "Une mise à jour est disponible !\n\nVoulez-vous visiter la page\ndes mises à jour pour la\ntélécharger ?" },

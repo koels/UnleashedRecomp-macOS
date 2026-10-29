@@ -1,0 +1,56 @@
+diff --git a/src/video/cocoa/SDL_cocoametalview.m b/src/video/cocoa/SDL_cocoametalview.m
+index d71f6511d..e300f7976 100644
+--- a/src/video/cocoa/SDL_cocoametalview.m
++++ b/src/video/cocoa/SDL_cocoametalview.m
+@@ -32,6 +32,7 @@
+ 
+ #include "SDL_events.h"
+ #include "SDL_syswm.h"
++#include "SDL_hints.h"
+ 
+ 
+ static int SDLCALL
+@@ -114,7 +115,10 @@ SDL_MetalViewEventWatch(void *userdata, SDL_Event *event)
+     NSSize size = self.bounds.size;
+     NSSize backingSize = size;
+ 
+-    if (self.highDPI) {
++    const char *scaleHint = SDL_GetHint("SDL_VIDEO_MAC_METAL_SCALE");
++    if (scaleHint && SDL_atof(scaleHint) > 0.0) {
++        backingSize = NSMakeSize(size.width * SDL_atof(scaleHint), size.height * SDL_atof(scaleHint));
++    } else if (self.highDPI) {
+         /* Note: NSHighResolutionCapable must be set to true in the app's
+          * Info.plist in order for the backing size to be high res.
+          */
+diff --git a/src/video/cocoa/SDL_cocoawindow.m b/src/video/cocoa/SDL_cocoawindow.m
+index 8e22a0c17..6cb87b0bd 100644
+--- a/src/video/cocoa/SDL_cocoawindow.m
++++ b/src/video/cocoa/SDL_cocoawindow.m
+@@ -877,7 +877,7 @@ static NSCursor *Cocoa_GetDesiredCursor(void)
+     /* Check to see if someone updated the clipboard */
+     Cocoa_CheckClipboardUpdate(_data.videodata);
+ 
+-    if ((isFullscreenSpace) && ((window->flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP)) {
++    if ((isFullscreenSpace) && !SDL_GetHintBoolean("SDL_VIDEO_MAC_FULLSCREEN_MENU_BAR", SDL_FALSE) && ((window->flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP)) {
+         [NSMenu setMenuBarVisible:NO];
+     }
+     {
+@@ -978,7 +978,7 @@ static NSCursor *Cocoa_GetDesiredCursor(void)
+         pendingWindowOperation = PENDING_OPERATION_NONE;
+         [self setFullscreenSpace:NO];
+     } else {
+-        if ((window->flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP) {
++        if (!SDL_GetHintBoolean("SDL_VIDEO_MAC_FULLSCREEN_MENU_BAR", SDL_FALSE) && (window->flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP) {
+             [NSMenu setMenuBarVisible:NO];
+         }
+ 
+@@ -1124,6 +1124,9 @@ static NSCursor *Cocoa_GetDesiredCursor(void)
+ -(NSApplicationPresentationOptions)window:(NSWindow *)window willUseFullScreenPresentationOptions:(NSApplicationPresentationOptions)proposedOptions
+ {
+     if ((_data.window->flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP) {
++        if (SDL_GetHintBoolean("SDL_VIDEO_MAC_FULLSCREEN_MENU_BAR", SDL_FALSE)) {
++            return NSApplicationPresentationFullScreen | NSApplicationPresentationAutoHideDock | NSApplicationPresentationAutoHideMenuBar;
++        }
+         return NSApplicationPresentationFullScreen | NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar;
+     } else {
+         return proposedOptions;

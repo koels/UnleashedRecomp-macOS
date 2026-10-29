@@ -629,6 +629,21 @@ CONFIG_DEFINE_LOCALE(VSync)
     { ELanguage::Italian,  { "V-Sync", "Sincronizza il gioco con la frequenza d'aggiornamento del display per evitare lo screen tearing." } }
 };
 
+CONFIG_DEFINE_LOCALE(HighDPI)
+{
+    { ELanguage::English, { "HiDPI", "Render at the display's native Retina resolution. Turning this off renders at half the resolution for better performance and lower temperatures." } }
+};
+
+CONFIG_DEFINE_LOCALE(FullscreenResolution)
+{
+    { ELanguage::English, { "Resolution", "Change the output resolution in fullscreen. Lower resolutions are upscaled to fit the screen, which improves performance and reduces temperatures." } }
+};
+
+CONFIG_DEFINE_LOCALE(FullscreenMenuBar)
+{
+    { ELanguage::English, { "Show Menu Bar", "Reveal the menu bar and Dock when moving the cursor to the edge of the screen in fullscreen." } }
+};
+
 // Japanese Notes: This localization should include furigana.
 CONFIG_DEFINE_LOCALE(FPS)
 {

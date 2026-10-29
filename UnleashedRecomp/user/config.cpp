@@ -2,6 +2,9 @@
 #include <os/logger.h>
 #include <ui/game_window.h>
 #include <user/paths.h>
+#ifdef __APPLE__
+#include <os/macos/fullscreen_macos.h>
+#endif
 
 std::vector<IConfigDef*> g_configDefinitions;
 
@@ -781,12 +784,33 @@ void Config::CreateCallbacks()
     {
         GameWindow::SetFullscreen(def->Value);
         GameWindow::SetDisplay(Config::Monitor);
+#ifdef __APPLE__
+        GameWindow::UpdateOutputScale();
+#endif
     };
 
     Config::ResolutionScale.Callback = [](ConfigDef<float>* def)
     {
         def->Value = std::clamp(def->Value, 0.25f, 2.0f);
     };
+
+#ifdef __APPLE__
+    Config::HighDPI.Callback = [](ConfigDef<bool>* def)
+    {
+        Config::FullscreenResolution.Value = 0;
+        GameWindow::UpdateOutputScale();
+    };
+
+    Config::FullscreenResolution.Callback = [](ConfigDef<int32_t>* def)
+    {
+        GameWindow::UpdateOutputScale();
+    };
+
+    Config::FullscreenMenuBar.Callback = [](ConfigDef<bool>* def)
+    {
+        os::macos::SetFullscreenMenuBar(def->Value);
+    };
+#endif
 }
 
 void Config::Load()

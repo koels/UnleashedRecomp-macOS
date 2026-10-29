@@ -8,6 +8,7 @@
 #include <user/achievement_manager.h>
 #include <user/paths.h>
 #include <app.h>
+#include <ui/game_window.h>
 
 static std::atomic<bool> g_faderBegun = false;
 
@@ -95,6 +96,14 @@ static bool ProcessUpdateAvailableMessage()
     {
         if (!g_updateAvailableMessageResult)
         {
+#ifdef __APPLE__
+            // Sparkle's window can't show over a fullscreen game. It downloads and installs,
+            // then quits and relaunches the game itself.
+            if (GameWindow::IsFullscreen())
+                Config::Fullscreen = GameWindow::SetFullscreen(false);
+
+            UpdateChecker::visitWebsite();
+#else
             Fader::FadeOut(1,
             //
                 []()
@@ -105,6 +114,7 @@ static bool ProcessUpdateAvailableMessage()
             );
 
             g_faderBegun = true;
+#endif
         }
 
         g_updateAvailableMessageOpen = false;
@@ -150,6 +160,8 @@ void PressStartSaveLoadThreadMidAsmHook()
 PPC_FUNC_IMPL(__imp__sub_82587E50);
 PPC_FUNC(sub_82587E50)
 {
+    GameWindow::s_lastTitleTime = App::s_time;
+
     auto pTitleStateIntro = (SWA::CTitleStateIntro*)g_memory.Translate(ctx.r3.u32);
     auto pTime = (be<float>*)((uint8_t*)pTitleStateIntro->GetContextBase() + 0x10C);
 

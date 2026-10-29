@@ -5,6 +5,7 @@
 #include <ui/options_menu.h>
 #include <locale/locale.h>
 #include <app.h>
+#include <ui/game_window.h>
 
 bool g_isClosed;
 
@@ -180,6 +181,9 @@ PPC_FUNC(sub_824B0930)
             ButtonGuide::Close();
             g_isClosed = true;
         }
+
+        if (!pHudPause->m_IsShown)
+            GameWindow::s_lastGameplayTime = App::s_time;
 
         __imp__sub_824B0930(ctx, base);
     }

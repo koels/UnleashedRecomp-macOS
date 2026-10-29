@@ -444,8 +444,24 @@ uint32_t XamInputGetState(uint32_t userIndex, uint32_t flags, XAMINPUT_STATE* st
         if (keyboardState[Config::Key_DPadRight])
             state->Gamepad.wButtons |= XAMINPUT_GAMEPAD_DPAD_RIGHT;
 
-        if (keyboardState[Config::Key_Start])
-            state->Gamepad.wButtons |= XAMINPUT_GAMEPAD_START;
+        bool isEnter = keyboardState[SDL_SCANCODE_RETURN] || keyboardState[SDL_SCANCODE_KP_ENTER];
+        bool isEscape = keyboardState[SDL_SCANCODE_ESCAPE];
+
+        // In menus Enter confirms (A) and Escape backs out (B); in gameplay both pause (Start).
+        if (GameWindow::s_isGameplay)
+        {
+            if (keyboardState[Config::Key_Start] || isEnter || isEscape)
+                state->Gamepad.wButtons |= XAMINPUT_GAMEPAD_START;
+        }
+        else
+        {
+            if (keyboardState[Config::Key_Start] && Config::Key_Start != SDL_SCANCODE_RETURN)
+                state->Gamepad.wButtons |= XAMINPUT_GAMEPAD_START;
+            if (isEnter)
+                state->Gamepad.wButtons |= XAMINPUT_GAMEPAD_A;
+            if (isEscape)
+                state->Gamepad.wButtons |= XAMINPUT_GAMEPAD_B;
+        }
         if (keyboardState[Config::Key_Back])
             state->Gamepad.wButtons |= XAMINPUT_GAMEPAD_BACK;
 

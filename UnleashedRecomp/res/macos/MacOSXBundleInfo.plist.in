@@ -38,5 +38,11 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>${UNLEASHED_RECOMP_SPARKLE_FEED_URL}</string>
+	<key>SUPublicEDKey</key>
+	<string>${UNLEASHED_RECOMP_SPARKLE_PUBLIC_KEY}</string>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
 </dict>
 </plist>

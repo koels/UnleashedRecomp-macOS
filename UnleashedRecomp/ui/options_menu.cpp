@@ -107,6 +107,12 @@ static std::unique_ptr<GuestTexture> g_upMilesElectric;
 
 static float g_rightStickY;
 
+// Mouse input gathered from SDL events and consumed once per frame in OptionsMenu::Draw.
+static bool g_mouseMoved;
+static bool g_mouseLeftClicked;
+static bool g_mouseRightClicked;
+static int32_t g_mouseWheel;
+
 class SDLEventListenerForOptionsMenu : public SDLEventListener
 {
 public:
@@ -117,6 +123,22 @@ public:
 
         if (event->type == SDL_CONTROLLERAXISMOTION && event->caxis.axis == SDL_CONTROLLER_AXIS_RIGHTY)
             g_rightStickY = event->caxis.value / 32767.0f;
+
+        switch (event->type)
+        {
+            case SDL_MOUSEMOTION:
+                g_mouseMoved = true;
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+                g_mouseLeftClicked |= event->button.button == SDL_BUTTON_LEFT;
+                g_mouseRightClicked |= event->button.button == SDL_BUTTON_RIGHT;
+                break;
+
+            case SDL_MOUSEWHEEL:
+                g_mouseWheel += event->wheel.y;
+                break;
+        }
 
         return false;
     }
@@ -451,8 +473,20 @@ static bool DrawCategories()
 
     auto inputState = SWA::CInputState::GetInstance();
 
-    bool moveLeft = !g_lockedOnOption && inputState->GetPadState().IsTapped(SWA::eKeyState_LeftBumper);
-    bool moveRight = !g_lockedOnOption && inputState->GetPadState().IsTapped(SWA::eKeyState_RightBumper);
+    auto& padState = inputState->GetPadState();
+
+    // Left/right (arrow keys, D-pad, left stick) also switch tabs; they're unused on rows until one is locked on.
+    static bool s_tabLeftWasHeld;
+    static bool s_tabRightWasHeld;
+    bool tabLeftIsHeld = !g_lockedOnOption && (padState.IsDown(SWA::eKeyState_DpadLeft) || padState.LeftStickHorizontal < -0.5f);
+    bool tabRightIsHeld = !g_lockedOnOption && (padState.IsDown(SWA::eKeyState_DpadRight) || padState.LeftStickHorizontal > 0.5f);
+    bool tabLeftTapped = tabLeftIsHeld && !s_tabLeftWasHeld;
+    bool tabRightTapped = tabRightIsHeld && !s_tabRightWasHeld;
+    s_tabLeftWasHeld = tabLeftIsHeld;
+    s_tabRightWasHeld = tabRightIsHeld;
+
+    bool moveLeft = !g_lockedOnOption && (padState.IsTapped(SWA::eKeyState_LeftBumper) || tabLeftTapped);
+    bool moveRight = !g_lockedOnOption && (padState.IsTapped(SWA::eKeyState_RightBumper) || tabRightTapped);
 
     if (moveLeft)
     {
@@ -514,6 +548,14 @@ static bool DrawCategories()
 
         ImVec2 min = { clipRectMin.x + xOffset - tabPadding, clipRectMin.y };
         ImVec2 max = { min.x + textSizes[i].x + tabPadding * 2.0f, min.y + tabHeight};
+
+        if (g_mouseLeftClicked && !g_lockedOnOption && g_categoryIndex != i && ImGui::IsMouseHoveringRect(min, max, false))
+        {
+            g_categoryIndex = int32_t(i);
+            g_mouseLeftClicked = false;
+            ResetSelection();
+            Game_PlaySound("sys_actstg_score");
+        }
 
         if (g_categoryIndex == i)
         {
@@ -785,6 +827,21 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
 
     bool lockedOnOption = false;
 
+    bool isHovered = !g_lockedOnOption &&
+        ImGui::IsMouseHoveringRect({ min.x, std::max(min.y, clipRectMin.y) }, { clipRectMax.x, std::min(max.y, clipRectMax.y) }, false);
+
+    if (isHovered && (g_mouseMoved || g_mouseLeftClicked) && g_selectedRowIndex != rowIndex)
+    {
+        g_prevSelectedRowIndex = g_selectedRowIndex;
+        g_selectedRowIndex = rowIndex;
+        g_rowSelectionTime = ImGui::GetTime();
+        Game_PlaySound("sys_worldmap_cursor");
+    }
+
+    // While locked on, a click anywhere confirms; otherwise it has to be on this row.
+    bool isAcceptTapped = padState.IsTapped(SWA::eKeyState_A) || (g_mouseLeftClicked && (g_lockedOnOption || isHovered));
+    bool isCancelTapped = padState.IsTapped(SWA::eKeyState_B) || (g_mouseRightClicked && g_lockedOnOption);
+
     if (g_selectedRowIndex == rowIndex)
     {
         g_selectedItem = config;
@@ -796,7 +853,7 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
             {
                 if constexpr (std::is_same_v<T, bool>)
                 {
-                    if (padState.IsTapped(SWA::eKeyState_A))
+                    if (isAcceptTapped)
                     {
                         config->Value = !config->Value;
 
@@ -812,7 +869,7 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
                 {
                     static T s_oldValue;
 
-                    if (padState.IsTapped(SWA::eKeyState_A))
+                    if (isAcceptTapped)
                     {
                         g_lockedOnOption ^= true;
 
@@ -844,7 +901,7 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
                             Game_PlaySound("sys_worldmap_finaldecide");
                         }
                     }
-                    else if (padState.IsTapped(SWA::eKeyState_B))
+                    else if (isCancelTapped)
                     {
                         // released lock, restore old value
                         config->Value = s_oldValue;
@@ -877,7 +934,7 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
             }
             else
             {
-                if (padState.IsTapped(SWA::eKeyState_A))
+                if (isAcceptTapped)
                     Game_PlaySound("sys_actstg_stateserror");
             }
         }
@@ -890,6 +947,8 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
     if (Config::Language == ELanguage::Japanese)
         textPos.y += Scale(10.0f);
 
+    bool textOverflows = textPos.x + textSize.x > max.x;
+
     if (g_selectedItem == config)
     {
         float prevItemOffset = (g_prevSelectedRowIndex - g_selectedRowIndex) * (optionHeight + optionPadding);
@@ -901,7 +960,9 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
 
         drawList->AddRectFilledMultiColor({ min.x, min.y + prevItemOffset }, { max.x, max.y + prevItemOffset }, c0, c0, c1, c1);
 
-        DrawTextWithMarquee(g_seuratFont, size, textPos, min, max, textColour, configName.c_str(), g_rowSelectionTime, 0.9, Scale(250.0));
+        // Only scroll names that don't fit.
+        if (textOverflows)
+            DrawTextWithMarquee(g_seuratFont, size, textPos, min, max, textColour, configName.c_str(), g_rowSelectionTime, 0.9, Scale(250.0));
 
         // large
         g_canReset = g_isControlsVisible &&
@@ -910,7 +971,8 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
             g_selectedItem != &Config::WindowSize &&
             isAccessible;
     }
-    else
+
+    if (g_selectedItem != config || !textOverflows)
     {
         drawList->PushClipRect(min, max, true);
 
@@ -1014,8 +1076,8 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
         if (leftTapped || rightTapped)
             g_lastTappedTime = time;
 
-        bool decrement = leftTapped;
-        bool increment = rightTapped;
+        bool decrement = leftTapped || g_mouseWheel < 0;
+        bool increment = rightTapped || g_mouseWheel > 0;
 
         g_leftWasHeld = leftIsHeld;
         g_rightWasHeld = rightIsHeld;
@@ -1122,9 +1184,27 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
     if constexpr (std::is_same_v<T, float>)
     {
         valueText = fmt::format("{}%", int32_t(round(config->Value * 100.0f)));
+
+        // Show the actual render resolution so the scale is easier to reason about.
+        if (config == &Config::ResolutionScale)
+        {
+            valueText += fmt::format(" ({}x{})",
+                uint32_t(round(Video::s_viewportWidth * config->Value)),
+                uint32_t(round(Video::s_viewportHeight * config->Value)));
+        }
     }
     else if constexpr (std::is_same_v<T, int32_t>)
     {
+#ifdef __APPLE__
+        if (config == &Config::FullscreenResolution)
+        {
+            auto& resolutions = GameWindow::GetFullscreenResolutions();
+            auto index = std::clamp(config->Value, 0, int32_t(resolutions.size()) - 1);
+
+            valueText = fmt::format("{}x{}", resolutions[index].first, resolutions[index].second);
+        }
+        else
+#endif
         if (config == &Config::WindowSize)
         {
             if (Config::Fullscreen)
@@ -1255,6 +1335,12 @@ static void DrawConfigOptions()
 
         case 3: // VIDEO
         {
+#ifdef __APPLE__
+            if (Config::Fullscreen)
+                DrawConfigOption(rowCount++, yOffset, &Config::FullscreenResolution, true, nullptr,
+                    0, 0, (int32_t)GameWindow::GetFullscreenResolutions().size() - 1, false);
+            else
+#endif
             DrawConfigOption(rowCount++, yOffset, &Config::WindowSize,
                 !Config::Fullscreen, &Localise("Options_Desc_NotAvailableFullscreen"),
                 0, 0, (int32_t)GameWindow::GetDisplayModes().size() - 1, false);
@@ -1271,6 +1357,10 @@ static void DrawConfigOptions()
             DrawConfigOption(rowCount++, yOffset, &Config::AspectRatio, true);
             DrawConfigOption(rowCount++, yOffset, &Config::ResolutionScale, true, nullptr, 0.25f, 1.0f, 2.0f);
             DrawConfigOption(rowCount++, yOffset, &Config::Fullscreen, true);
+#ifdef __APPLE__
+            DrawConfigOption(rowCount++, yOffset, &Config::HighDPI, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::FullscreenMenuBar, Config::Fullscreen, &Localise("Options_Desc_NotAvailableWindowed"));
+#endif
             DrawConfigOption(rowCount++, yOffset, &Config::VSync, true);
             DrawConfigOption(rowCount++, yOffset, &Config::FPS, true, nullptr, FPS_MIN, 120, FPS_MAX);
             DrawConfigOption(rowCount++, yOffset, &Config::Brightness, true);
@@ -1295,8 +1385,8 @@ static void DrawConfigOptions()
     bool downIsHeld = !g_lockedOnOption && (inputState->GetPadState().IsDown(SWA::eKeyState_DpadDown) ||
         inputState->GetPadState().LeftStickVertical < -0.5f);
 
-    bool scrollUp = !g_upWasHeld && upIsHeld;
-    bool scrollDown = !g_downWasHeld && downIsHeld;
+    bool scrollUp = (!g_upWasHeld && upIsHeld) || (!g_lockedOnOption && g_mouseWheel > 0);
+    bool scrollDown = (!g_downWasHeld && downIsHeld) || (!g_lockedOnOption && g_mouseWheel < 0);
 
     int32_t prevSelectedRowIndex = g_selectedRowIndex;
 
@@ -1743,6 +1833,18 @@ void OptionsMenu::Draw()
 {
     if (!s_isVisible)
         return;
+
+    // Mouse input is per frame; clear it however this function returns.
+    struct MouseReset
+    {
+        ~MouseReset()
+        {
+            g_mouseMoved = false;
+            g_mouseLeftClicked = false;
+            g_mouseRightClicked = false;
+            g_mouseWheel = 0;
+        }
+    } mouseReset;
 
     // We've entered the menu now, no need to check this.
     auto pInputState = SWA::CInputState::GetInstance();
