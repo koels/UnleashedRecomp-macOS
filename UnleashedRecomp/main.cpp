@@ -313,10 +313,15 @@ int main(int argc, char *argv[])
 #endif
 
     // Check the time since the last time an update was checked. Store the new time if the difference is more than six hours.
+#ifdef __APPLE__
+    // Sparkle's probe is one small appcast request, so check on every launch.
+    constexpr double TimeBetweenUpdateChecksInSeconds = 0;
+#else
     constexpr double TimeBetweenUpdateChecksInSeconds = 6 * 60 * 60;
+#endif
     time_t timeNow = std::time(nullptr);
     double timeDifferenceSeconds = difftime(timeNow, Config::LastChecked);
-    if (timeDifferenceSeconds > TimeBetweenUpdateChecksInSeconds)
+    if (timeDifferenceSeconds >= TimeBetweenUpdateChecksInSeconds)
     {
         UpdateChecker::initialize();
         UpdateChecker::start();
