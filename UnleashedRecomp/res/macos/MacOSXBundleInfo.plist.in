@@ -34,6 +34,8 @@
 	<string>13.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.games</string>
+	<key>NSAppSleepDisabled</key>
+	<true/>
 	<key>GCSupportsGameMode</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>

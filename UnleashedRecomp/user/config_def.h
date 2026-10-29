@@ -42,6 +42,8 @@ CONFIG_DEFINE_ENUM("Bindings", SDL_Scancode, Key_RightStickRight, SDL_SCANCODE_U
 CONFIG_DEFINE_LOCALISED("Audio", float, MasterVolume, 1.0f);
 CONFIG_DEFINE_LOCALISED("Audio", float, MusicVolume, 1.0f);
 CONFIG_DEFINE_LOCALISED("Audio", float, EffectsVolume, 1.0f);
+CONFIG_DEFINE("Audio", float, UnfocusedVolume, 0.5f);
+CONFIG_DEFINE("System", std::string, DiscordApplicationId, "1565258167120560208");
 CONFIG_DEFINE_ENUM_LOCALISED("Audio", EChannelConfiguration, ChannelConfiguration, EChannelConfiguration::Stereo);
 CONFIG_DEFINE_LOCALISED("Audio", bool, MusicAttenuation, false);
 CONFIG_DEFINE_LOCALISED("Audio", bool, BattleTheme, true);
@@ -64,6 +66,7 @@ CONFIG_DEFINE_LOCALISED("Video", int32_t, FullscreenResolution, 0);
 CONFIG_DEFINE_LOCALISED("Video", bool, VSync, true);
 CONFIG_DEFINE_ENUM("Video", ETripleBuffering, TripleBuffering, ETripleBuffering::Auto);
 CONFIG_DEFINE_LOCALISED("Video", int32_t, FPS, 60);
+CONFIG_DEFINE("Video", int32_t, UnfocusedFPS, 30);
 CONFIG_DEFINE("Video", bool, ShowFPS, false);
 CONFIG_DEFINE("Video", uint32_t, MaxFrameLatency, 2);
 CONFIG_DEFINE_LOCALISED("Video", float, Brightness, 0.5f);

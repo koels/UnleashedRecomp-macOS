@@ -99,6 +99,7 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Linux")
     )
 elseif (APPLE)
     set(UNLEASHED_RECOMP_OS_CXX_SOURCES
+        "os/macos/discord_macos.cpp"
         "os/macos/fullscreen_macos.mm"
         "os/macos/logger_macos.cpp"
         "os/macos/media_macos.cpp"

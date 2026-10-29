@@ -20,6 +20,7 @@
 #include <kernel/xdbf.h>
 #include <install/installer.h>
 #include <install/update_checker.h>
+#include <os/discord.h>
 #include <os/logger.h>
 #include <os/process.h>
 #include <os/registry.h>
@@ -117,6 +118,10 @@ void KiSystemStartup()
     }
 
     XAudioInitializeSystem();
+
+#ifdef __APPLE__
+    os::discord::Init();
+#endif
 }
 
 uint32_t LdrLoadModule(const std::filesystem::path &path)

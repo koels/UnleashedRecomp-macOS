@@ -2861,7 +2861,12 @@ void Video::Present()
     cmd.type = RenderCommandType::BeginCommandList;
     g_renderQueue.enqueue(cmd);
 
-    if (Config::FPS >= FPS_MIN && Config::FPS < FPS_MAX)
+    // Throttle while in the background to save power and heat.
+    int32_t fps = Config::FPS;
+    if (!GameWindow::s_isFocused && Config::UnfocusedFPS >= FPS_MIN)
+        fps = (fps >= FPS_MIN && fps < FPS_MAX) ? std::min(fps, Config::UnfocusedFPS.Value) : Config::UnfocusedFPS.Value;
+
+    if (fps >= FPS_MIN && fps < FPS_MAX)
     {
         using namespace std::chrono_literals;
 
@@ -2881,7 +2886,7 @@ void Video::Present()
             s_next = now;
         }
 
-        s_next += 1000000000ns / Config::FPS;
+        s_next += 1000000000ns / fps;
     }
 
     g_presentProfiler.Reset();

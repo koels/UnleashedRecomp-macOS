@@ -3,6 +3,7 @@
 #include <kernel/heap.h>
 #include <os/logger.h>
 #include <user/config.h>
+#include <ui/game_window.h>
 
 static PPCFunc* g_clientCallback{};
 static uint32_t g_clientCallbackParam{}; // pointer in guest memory
@@ -62,6 +63,11 @@ static void AudioThread()
 {
     using namespace std::chrono_literals;
 
+#ifdef __APPLE__
+    // Keep the audio thread at high priority while the app is in the background.
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
+
     GuestThreadContext ctx(0);
 
     size_t channels = g_downMixToStereo ? 2 : XAUDIO_NUM_CHANNELS;
@@ -69,10 +75,16 @@ static void AudioThread()
     while (!g_audioThreadShouldExit)
     {
         uint32_t queuedAudioSize = SDL_GetQueuedAudioSize(g_audioDevice);
-        constexpr size_t MAX_LATENCY = 10;
+        constexpr size_t MIN_LATENCY = 6;
+        constexpr size_t MAX_LATENCY = 12;
         const size_t callbackAudioSize = channels * XAUDIO_NUM_SAMPLES * sizeof(float);
+        size_t queuedFrames = queuedAudioSize / callbackAudioSize;
 
-        if ((queuedAudioSize / callbackAudioSize) <= MAX_LATENCY)
+        // Producing one frame per tick only keeps pace, so after a stall (e.g. switching Spaces)
+        // the queue would stay near empty and crackle. Catch back up to a safe buffer instead.
+        size_t framesToSubmit = queuedFrames < MIN_LATENCY ? MIN_LATENCY - queuedFrames : (queuedFrames <= MAX_LATENCY ? 1 : 0);
+
+        for (size_t i = 0; i < framesToSubmit; i++)
         {
             ctx.ppcContext.r3.u32 = g_clientCallbackParam;
             g_clientCallback(ctx.ppcContext, g_memory.base);
@@ -111,6 +123,12 @@ void XAudioSubmitFrame(void* samples)
 {
     auto floatSamples = reinterpret_cast<be<float>*>(samples);
 
+    // Duck the volume while the window is unfocused, easing per frame to avoid clicks.
+    static float s_focusVolume = 1.0f;
+    float targetFocusVolume = GameWindow::s_isFocused ? 1.0f : std::clamp(Config::UnfocusedVolume.Value, 0.0f, 1.0f);
+    s_focusVolume += (targetFocusVolume - s_focusVolume) * 0.05f;
+    float volume = Config::MasterVolume * s_focusVolume;
+
     if (g_downMixToStereo)
     {
         // 0: left 1.0f, right 0.0f
@@ -131,8 +149,8 @@ void XAudioSubmitFrame(void* samples)
             float ch4 = floatSamples[4 * XAUDIO_NUM_SAMPLES + i];
             float ch5 = floatSamples[5 * XAUDIO_NUM_SAMPLES + i];
 
-            audioFrames[i * 2 + 0] = (ch0 + ch2 * 0.75f + ch4) * Config::MasterVolume;
-            audioFrames[i * 2 + 1] = (ch1 + ch2 * 0.75f + ch5) * Config::MasterVolume;
+            audioFrames[i * 2 + 0] = (ch0 + ch2 * 0.75f + ch4) * volume;
+            audioFrames[i * 2 + 1] = (ch1 + ch2 * 0.75f + ch5) * volume;
         }
 
         SDL_QueueAudio(g_audioDevice, &audioFrames, sizeof(audioFrames));
@@ -144,7 +162,7 @@ void XAudioSubmitFrame(void* samples)
         for (size_t i = 0; i < XAUDIO_NUM_SAMPLES; i++)
         {
             for (size_t j = 0; j < XAUDIO_NUM_CHANNELS; j++)
-                audioFrames[i * XAUDIO_NUM_CHANNELS + j] = floatSamples[j * XAUDIO_NUM_SAMPLES + i] * Config::MasterVolume;
+                audioFrames[i * XAUDIO_NUM_CHANNELS + j] = floatSamples[j * XAUDIO_NUM_SAMPLES + i] * volume;
         }
 
         SDL_QueueAudio(g_audioDevice, &audioFrames, sizeof(audioFrames));
