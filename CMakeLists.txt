@@ -19,9 +19,9 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 project("UnleashedRecomp-ALL")
 
-# macOS app identity and updates. Leave the Sparkle values empty to build without update checks.
+# macOS app identity and updates. Pass -DUNLEASHED_RECOMP_SPARKLE_FEED_URL="" to build without update checks.
 set(UNLEASHED_RECOMP_BUNDLE_ID "io.github.koels.UnleashedRecomp" CACHE STRING "macOS bundle identifier")
-set(UNLEASHED_RECOMP_SPARKLE_FEED_URL "" CACHE STRING "Sparkle appcast URL")
+set(UNLEASHED_RECOMP_SPARKLE_FEED_URL "https://github.com/koels/UnleashedRecomp-macOS/releases/latest/download/appcast.xml" CACHE STRING "Sparkle appcast URL")
 # Public half of the key stored in the keychain under the "unleashed-recomp-macos" account.
 set(UNLEASHED_RECOMP_SPARKLE_PUBLIC_KEY "Jt6cOSfJptp74KNHgW8ZKea+odZg7rn3TpJ1l5xlTaQ=" CACHE STRING "Sparkle EdDSA public key (from generate_keys)")
 

@@ -1,6 +1,6 @@
 # Releasing on macOS
 
-Updates are delivered with [Sparkle 2](https://sparkle-project.org). Builds made without a feed URL and public key skip update checks entirely, which is the default for local development.
+Updates are delivered with [Sparkle 2](https://sparkle-project.org). The feed defaults to `appcast.xml` on this repository's latest GitHub release; configure with `-DUNLEASHED_RECOMP_SPARKLE_FEED_URL=""` to build without update checks.
 
 ## One-time setup
 
@@ -12,24 +12,25 @@ Back up the private key somewhere safe. Without it you can't ship updates to exi
 out/build/macos-release/Sparkle-2.6.4/bin/generate_keys --account unleashed-recomp-macos -x <backup file>
 ```
 
-2. Pick where the appcast will live. A GitHub release asset works:
-   `https://github.com/<you>/<repo>/releases/latest/download/appcast.xml`
-
 ## Each release
 
 1. Bump the version in `UnleashedRecomp/res/version.txt`. Sparkle compares versions, so it must increase.
 
-2. Configure with the feed URL, then build:
+2. Configure and build:
 
 ```bash
-cmake . --preset macos-release -DUNLEASHED_RECOMP_SPARKLE_FEED_URL="<appcast URL>"
+cmake . --preset macos-release
 ```
 
 ```bash
 cmake --build ./out/build/macos-release --target UnleashedRecomp
 ```
 
-3. Sign the app with your Developer ID and notarize it. Unsigned or ad-hoc signed builds trigger Gatekeeper warnings, and Sparkle can't install over them cleanly.
+3. Sign the app. With a Developer ID, sign and notarize it so it opens without warnings. Without one, ad-hoc sign it; Sparkle updates still install, but first-time users have to allow the app in System Settings → Privacy & Security:
+
+```bash
+codesign --force --deep -s - "out/build/macos-release/UnleashedRecomp/Unleashed Recompiled.app"
+```
 
 4. Zip the app. `ditto` keeps symlinks and signatures intact:
 
@@ -40,10 +41,10 @@ ditto -c -k --keepParent "out/build/macos-release/UnleashedRecomp/Unleashed Reco
 5. Generate the appcast from a folder of release zips. This signs each update with your private key:
 
 ```bash
-out/build/macos-release/Sparkle-2.6.4/bin/generate_appcast --account unleashed-recomp-macos <folder with zips>
+out/build/macos-release/Sparkle-2.6.4/bin/generate_appcast --account unleashed-recomp-macos --download-url-prefix "https://github.com/koels/UnleashedRecomp-macOS/releases/download/<tag>/" <folder with zips>
 ```
 
-6. Upload the zip and `appcast.xml` to the location the feed URL points at.
+6. Create a GitHub release for the tag and attach the zip and `appcast.xml`. The feed URL always resolves to the latest release's `appcast.xml`, so keep every past version in the folder from step 5 so the appcast lists them all.
 
 ## Game code and assets
 
