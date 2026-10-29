@@ -4,13 +4,13 @@ Updates are delivered with [Sparkle 2](https://sparkle-project.org). Builds made
 
 ## One-time setup
 
-1. Generate an EdDSA key pair. The private key goes into your login keychain, and the command prints the public key:
+1. The EdDSA key pair already exists: the private key is in the login keychain under the `unleashed-recomp-macos` account, and its public key is the default of `UNLEASHED_RECOMP_SPARKLE_PUBLIC_KEY` in `CMakeLists.txt`. Pass `--account unleashed-recomp-macos` to every Sparkle tool so it uses this key and not another project's.
+
+Back up the private key somewhere safe. Without it you can't ship updates to existing installs:
 
 ```bash
-out/build/macos-release/Sparkle-2.6.4/bin/generate_keys
+out/build/macos-release/Sparkle-2.6.4/bin/generate_keys --account unleashed-recomp-macos -x <backup file>
 ```
-
-Back up the private key (`generate_keys -x <file>`) somewhere safe. Without it you can't ship updates to existing installs.
 
 2. Pick where the appcast will live. A GitHub release asset works:
    `https://github.com/<you>/<repo>/releases/latest/download/appcast.xml`
@@ -19,10 +19,10 @@ Back up the private key (`generate_keys -x <file>`) somewhere safe. Without it y
 
 1. Bump the version in `UnleashedRecomp/res/version.txt`. Sparkle compares versions, so it must increase.
 
-2. Configure with the feed and key, then build:
+2. Configure with the feed URL, then build:
 
 ```bash
-cmake . --preset macos-release -DUNLEASHED_RECOMP_SPARKLE_FEED_URL="<appcast URL>" -DUNLEASHED_RECOMP_SPARKLE_PUBLIC_KEY="<public key>"
+cmake . --preset macos-release -DUNLEASHED_RECOMP_SPARKLE_FEED_URL="<appcast URL>"
 ```
 
 ```bash
@@ -40,7 +40,7 @@ ditto -c -k --keepParent "out/build/macos-release/UnleashedRecomp/Unleashed Reco
 5. Generate the appcast from a folder of release zips. This signs each update with your private key:
 
 ```bash
-out/build/macos-release/Sparkle-2.6.4/bin/generate_appcast <folder with zips>
+out/build/macos-release/Sparkle-2.6.4/bin/generate_appcast --account unleashed-recomp-macos <folder with zips>
 ```
 
 6. Upload the zip and `appcast.xml` to the location the feed URL points at.

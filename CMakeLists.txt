@@ -22,7 +22,8 @@ project("UnleashedRecomp-ALL")
 # macOS app identity and updates. Leave the Sparkle values empty to build without update checks.
 set(UNLEASHED_RECOMP_BUNDLE_ID "io.github.koels.UnleashedRecomp" CACHE STRING "macOS bundle identifier")
 set(UNLEASHED_RECOMP_SPARKLE_FEED_URL "" CACHE STRING "Sparkle appcast URL")
-set(UNLEASHED_RECOMP_SPARKLE_PUBLIC_KEY "" CACHE STRING "Sparkle EdDSA public key (from generate_keys)")
+# Public half of the key stored in the keychain under the "unleashed-recomp-macos" account.
+set(UNLEASHED_RECOMP_SPARKLE_PUBLIC_KEY "Jt6cOSfJptp74KNHgW8ZKea+odZg7rn3TpJ1l5xlTaQ=" CACHE STRING "Sparkle EdDSA public key (from generate_keys)")
 
 if (APPLE)
     enable_language(OBJC OBJCXX)
