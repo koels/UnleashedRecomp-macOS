@@ -2863,7 +2863,7 @@ void Video::Present()
 
     // Throttle while in the background to save power and heat.
     int32_t fps = Config::FPS;
-    if (!GameWindow::s_isFocused && Config::UnfocusedFPS >= FPS_MIN)
+    if (!GameWindow::s_isFocused && Config::UnfocusedFPS >= FPS_MIN && Config::UnfocusedFPS < FPS_MAX)
         fps = (fps >= FPS_MIN && fps < FPS_MAX) ? std::min(fps, Config::UnfocusedFPS.Value) : Config::UnfocusedFPS.Value;
 
     if (fps >= FPS_MIN && fps < FPS_MAX)

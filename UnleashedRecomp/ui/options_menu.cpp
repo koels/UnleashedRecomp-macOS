@@ -1363,6 +1363,7 @@ static void DrawConfigOptions()
 #endif
             DrawConfigOption(rowCount++, yOffset, &Config::VSync, true);
             DrawConfigOption(rowCount++, yOffset, &Config::FPS, true, nullptr, FPS_MIN, 120, FPS_MAX);
+            DrawConfigOption(rowCount++, yOffset, &Config::UnfocusedFPS, true, nullptr, FPS_MIN, 30, FPS_MAX);
             DrawConfigOption(rowCount++, yOffset, &Config::Brightness, true);
             DrawConfigOption(rowCount++, yOffset, &Config::AntiAliasing, Config::AntiAliasing.InaccessibleValues.size() != 3, &Localise("Options_Desc_NotAvailableHardware"));
             DrawConfigOption(rowCount++, yOffset, &Config::TransparencyAntiAliasing, Config::AntiAliasing != EAntiAliasing::None, &Localise("Options_Desc_NotAvailableMSAA"));
