@@ -85,10 +85,55 @@ static bool ProcessCorruptAchievementsMessage()
     return true;
 }
 
+#ifdef __APPLE__
+static bool g_isInstallingUpdate = false;
+
+// Keeps the title screen on a progress message while Sparkle downloads and installs.
+// Sparkle quits and relaunches the game when it's done; on failure the title screen resumes.
+static void ProcessUpdateInstall()
+{
+    auto progress = int(UpdateChecker::installProgress() * 100.0f);
+
+    switch (UpdateChecker::installState())
+    {
+        case UpdateChecker::InstallState::Downloading:
+            MessageWindow::SetText(fmt::format("Downloading update...\n\n{}%", progress));
+            break;
+
+        case UpdateChecker::InstallState::Extracting:
+            MessageWindow::SetText(fmt::format("Preparing update...\n\n{}%", progress));
+            break;
+
+        case UpdateChecker::InstallState::Installing:
+            MessageWindow::SetText("Installing update...\n\nThe game will restart automatically.");
+            break;
+
+        case UpdateChecker::InstallState::Failed:
+            LOGN_ERROR("Update installation failed.");
+            MessageWindow::Close();
+            g_isInstallingUpdate = false;
+            g_updateAvailableMessageOpen = false;
+            g_updateAvailableMessageOpen.notify_one();
+            break;
+
+        default:
+            break;
+    }
+}
+#endif
+
 static bool ProcessUpdateAvailableMessage()
 {
     if (!g_updateAvailableMessageOpen)
         return false;
+
+#ifdef __APPLE__
+    if (g_isInstallingUpdate)
+    {
+        ProcessUpdateInstall();
+        return true;
+    }
+#endif
 
     std::array<std::string, 2> options = { Localise("Common_Yes"), Localise("Common_No") };
 
@@ -97,12 +142,12 @@ static bool ProcessUpdateAvailableMessage()
         if (!g_updateAvailableMessageResult)
         {
 #ifdef __APPLE__
-            // Sparkle's window can't show over a fullscreen game. It downloads and installs,
-            // then quits and relaunches the game itself.
-            if (GameWindow::IsFullscreen())
-                Config::Fullscreen = GameWindow::SetFullscreen(false);
+            UpdateChecker::install();
+            MessageWindow::OpenProgress("Downloading update...");
+            g_isInstallingUpdate = true;
+            g_updateAvailableMessageResult = -1;
 
-            UpdateChecker::visitWebsite();
+            return true;
 #else
             Fader::FadeOut(1,
             //

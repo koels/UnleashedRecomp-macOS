@@ -42,6 +42,7 @@ static ImFont* g_fntSeurat;
 std::string g_text;
 int g_result;
 static std::vector<std::string> g_buttons;
+static bool g_isProgress = false;
 int g_defaultButtonIndex;
 int g_cancelButtonIndex;
 
@@ -529,7 +530,7 @@ void MessageWindow::Draw()
                 }
             }
         }
-        else
+        else if (!g_isProgress)
         {
             DrawNextButtonGuide(isController, isKeyboard);
 
@@ -576,6 +577,20 @@ bool MessageWindow::Open(std::string text, int* result, std::span<std::string> b
     return !g_isAwaitingResult;
 }
 
+void MessageWindow::OpenProgress(std::string text)
+{
+    static int s_result = -1;
+    s_result = -1;
+
+    Open(std::move(text), &s_result);
+    g_isProgress = true;
+}
+
+void MessageWindow::SetText(std::string text)
+{
+    g_text = std::move(text);
+}
+
 void MessageWindow::Close()
 {
     if (!g_isClosing)
@@ -586,6 +601,7 @@ void MessageWindow::Close()
         g_isControlsVisible = false;
         g_foregroundCount = 0;
         g_isAwaitingResult = false;
+        g_isProgress = false;
 
         ButtonGuide::Close();
     }

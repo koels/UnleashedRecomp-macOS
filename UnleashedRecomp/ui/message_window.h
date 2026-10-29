@@ -12,4 +12,8 @@ public:
     static void Draw();
     static bool Open(std::string text, int* result, std::span<std::string> buttons = {}, int defaultButtonIndex = 0, int cancelButtonIndex = 1);
     static void Close();
+
+    // Progress mode: no buttons, no "Next" prompt, and the text can change while it is open.
+    static void OpenProgress(std::string text);
+    static void SetText(std::string text);
 };

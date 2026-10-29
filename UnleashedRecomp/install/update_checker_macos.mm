@@ -5,7 +5,7 @@
 #include <os/logger.h>
 
 // UpdateChecker backed by Sparkle. The title screen asks check() for the result of a silent
-// background probe, and visitWebsite() hands over to Sparkle's own download and install flow.
+// background probe, and install() downloads and installs it with no Sparkle UI.
 
 static std::atomic<UpdateChecker::Result> g_result = UpdateChecker::Result::NotStarted;
 
@@ -37,8 +37,91 @@ static std::atomic<UpdateChecker::Result> g_result = UpdateChecker::Result::NotS
 
 @end
 
+// Windowless user driver: the title screen asks the player, so every Sparkle prompt is
+// answered with "install" and progress is exposed for the in-game message.
+
+static std::atomic<UpdateChecker::InstallState> g_installState = UpdateChecker::InstallState::Idle;
+static std::atomic<uint64_t> g_bytesExpected = 0;
+static std::atomic<uint64_t> g_bytesReceived = 0;
+static std::atomic<float> g_extractProgress = 0.0f;
+
+@interface GameUserDriver : NSObject <SPUUserDriver>
+@end
+
+@implementation GameUserDriver
+
+- (void)showUpdatePermissionRequest:(SPUUpdatePermissionRequest *)request reply:(void (^)(SUUpdatePermissionResponse *))reply
+{
+    reply([[SUUpdatePermissionResponse alloc] initWithAutomaticUpdateChecks:NO sendSystemProfile:NO]);
+}
+
+- (void)showUserInitiatedUpdateCheckWithCancellation:(void (^)(void))cancellation {}
+
+- (void)showUpdateFoundWithAppcastItem:(SUAppcastItem *)appcastItem state:(SPUUserUpdateState *)state reply:(void (^)(SPUUserUpdateChoice))reply
+{
+    reply(SPUUserUpdateChoiceInstall);
+}
+
+- (void)showUpdateReleaseNotesWithDownloadData:(SPUDownloadData *)downloadData {}
+- (void)showUpdateReleaseNotesFailedToDownloadWithError:(NSError *)error {}
+
+- (void)showUpdateNotFoundWithError:(NSError *)error acknowledgement:(void (^)(void))acknowledgement
+{
+    g_installState = UpdateChecker::InstallState::Failed;
+    acknowledgement();
+}
+
+- (void)showUpdaterError:(NSError *)error acknowledgement:(void (^)(void))acknowledgement
+{
+    LOGF_IMPL(Utility, "Sparkle", "Update failed: {}", error.localizedDescription.UTF8String);
+    g_installState = UpdateChecker::InstallState::Failed;
+    acknowledgement();
+}
+
+- (void)showDownloadInitiatedWithCancellation:(void (^)(void))cancellation
+{
+    g_bytesExpected = 0;
+    g_bytesReceived = 0;
+    g_installState = UpdateChecker::InstallState::Downloading;
+}
+
+- (void)showDownloadDidReceiveExpectedContentLength:(uint64_t)expectedContentLength
+{
+    g_bytesExpected = expectedContentLength;
+}
+
+- (void)showDownloadDidReceiveDataOfLength:(uint64_t)length
+{
+    g_bytesReceived += length;
+}
+
+- (void)showDownloadDidStartExtractingUpdate
+{
+    g_extractProgress = 0.0f;
+    g_installState = UpdateChecker::InstallState::Extracting;
+}
+
+- (void)showExtractionReceivedProgress:(double)progress
+{
+    g_extractProgress = float(progress);
+}
+
+- (void)showReadyToInstallAndRelaunch:(void (^)(SPUUserUpdateChoice))reply
+{
+    g_installState = UpdateChecker::InstallState::Installing;
+    reply(SPUUserUpdateChoiceInstall);
+}
+
+- (void)showInstallingUpdateWithApplicationTerminated:(BOOL)applicationTerminated retryTerminatingApplication:(void (^)(void))retryTerminatingApplication {}
+- (void)showUpdateInstalledAndRelaunched:(BOOL)relaunched acknowledgement:(void (^)(void))acknowledgement { acknowledgement(); }
+- (void)showUpdateInFocus {}
+- (void)dismissUpdateInstallation {}
+
+@end
+
 static SPUUpdater* g_updater;
 static UpdateCheckerDelegate* g_delegate;
+static GameUserDriver* g_userDriver;
 
 void UpdateChecker::initialize()
 {
@@ -52,8 +135,8 @@ void UpdateChecker::initialize()
 
     g_delegate = [UpdateCheckerDelegate new];
 
-    auto userDriver = [[SPUStandardUserDriver alloc] initWithHostBundle:NSBundle.mainBundle delegate:nil];
-    g_updater = [[SPUUpdater alloc] initWithHostBundle:NSBundle.mainBundle applicationBundle:NSBundle.mainBundle userDriver:userDriver delegate:g_delegate];
+    g_userDriver = [GameUserDriver new];
+    g_updater = [[SPUUpdater alloc] initWithHostBundle:NSBundle.mainBundle applicationBundle:NSBundle.mainBundle userDriver:g_userDriver delegate:g_delegate];
 
     // The game decides when to check (once per launch); Sparkle shouldn't schedule its own prompts.
     g_updater.automaticallyChecksForUpdates = NO;
@@ -86,9 +169,37 @@ UpdateChecker::Result UpdateChecker::check()
 
 void UpdateChecker::visitWebsite()
 {
-    if (!g_updater)
-        return;
+    install();
+}
 
-    // Shows release notes and installs on confirmation; Sparkle quits and relaunches the game itself.
+void UpdateChecker::install()
+{
+    if (!g_updater)
+    {
+        g_installState = InstallState::Failed;
+        return;
+    }
+
+    g_installState = InstallState::Downloading;
     [g_updater checkForUpdates];
+}
+
+UpdateChecker::InstallState UpdateChecker::installState()
+{
+    return g_installState;
+}
+
+float UpdateChecker::installProgress()
+{
+    switch (g_installState)
+    {
+        case InstallState::Downloading:
+            return g_bytesExpected ? std::min(1.0f, float(g_bytesReceived) / float(g_bytesExpected)) : 0.0f;
+
+        case InstallState::Extracting:
+            return g_extractProgress;
+
+        default:
+            return 1.0f;
+    }
 }
