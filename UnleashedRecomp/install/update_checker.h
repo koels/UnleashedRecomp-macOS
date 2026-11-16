@@ -31,5 +31,8 @@ struct UpdateChecker
     static void install();
     static InstallState installState();
     static float installProgress();
+
+    // "Check for Updates..." in the menu bar: checks now and answers with a native alert.
+    static void checkFromMenu();
 #endif
 };

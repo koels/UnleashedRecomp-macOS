@@ -6,6 +6,8 @@
 inline const char* g_whatsNew =
     "What's new\n"
     "\n"
-    "- Graphics presets in Options > Video.\n"
-    "- Low Power Mode caps the frame rate (30-60 FPS).\n"
-    "- Rebind keyboard keys in Options > Input.";
+    "- Install and manage mods: menu bar > Mods.\n"
+    "- Screenshots with Cmd+Shift+S or F12.\n"
+    "- Rebind controller buttons in Options > Input.\n"
+    "- New Tweaks tab, and pausing when you switch apps.\n"
+    "- Cmd+, opens Options; Cmd+F toggles fullscreen.";

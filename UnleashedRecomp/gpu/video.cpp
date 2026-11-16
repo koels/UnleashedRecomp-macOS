@@ -10,6 +10,13 @@
 #include <decompressor.h>
 #include <kernel/function.h>
 #include <kernel/heap.h>
+#include <os/logger.h>
+#include <user/paths.h>
+#include <stb_image_write.h>
+#include <ui/screenshot_toast.h>
+
+// Defined by stb_image_write's implementation (stdafx.cpp) but not declared in its header.
+extern "C" unsigned char* stbi_write_png_to_mem(const unsigned char* pixels, int stride_bytes, int x, int y, int n, int* out_len);
 #include <hid/hid.h>
 #include <kernel/memory.h>
 #include <kernel/xdbf.h>
@@ -332,6 +339,12 @@ static GuestSurface* g_backBuffer;
 
 static std::unique_ptr<RenderTexture> g_intermediaryBackBufferTexture;
 static uint32_t g_intermediaryBackBufferTextureWidth;
+
+// Screenshots read back the intermediary back buffer, so a screenshot frame always renders to it.
+static std::atomic<bool> g_isScreenshotRequested;
+static bool g_isScreenshotFrame;
+static std::unique_ptr<RenderBuffer> g_screenshotBuffer;
+static uint32_t g_screenshotRowWidth;
 static uint32_t g_intermediaryBackBufferTextureHeight;
 static uint32_t g_intermediaryBackBufferTextureDescriptorIndex;
 
@@ -1571,8 +1584,10 @@ static void BeginCommandList()
         uint32_t width = Video::s_viewportWidth;
         uint32_t height = Video::s_viewportHeight;
 
+        g_isScreenshotFrame = g_isScreenshotRequested.exchange(false);
+
         bool usingIntermediaryTexture = (width != g_swapChain->getWidth()) || (height != g_swapChain->getHeight()) ||
-            Config::XboxColorCorrection || (abs(Config::Brightness - 0.5f) > 0.001f);
+            Config::XboxColorCorrection || (abs(Config::Brightness - 0.5f) > 0.001f) || g_isScreenshotFrame;
 
         if (usingIntermediaryTexture)
         {
@@ -2610,6 +2625,7 @@ static void DrawImGui()
     ButtonGuide::Draw();
     Fader::Draw();
     BlackBar::Draw();
+    ScreenshotToast::Draw();
 
     assert(ImGui::GetBackgroundDrawList()->_ClipRectStack.Size == 1 && "Some clip rects were not removed from the stack!");
 
@@ -2919,6 +2935,72 @@ static void SetRootDescriptor(const UploadAllocation& allocation, size_t index)
         commandList->setGraphicsRootDescriptor(allocation.buffer->at(allocation.offset), index);
 }
 
+static std::filesystem::path GetScreenshotDirectory()
+{
+#ifdef __APPLE__
+    if (auto home = getenv("HOME"))
+        return std::filesystem::path(home) / "Pictures" / "Unleashed Recompiled";
+#endif
+    return GetUserPath() / "screenshots";
+}
+
+static void SaveScreenshot()
+{
+    uint32_t width = g_intermediaryBackBufferTextureWidth;
+    uint32_t height = g_intermediaryBackBufferTextureHeight;
+    std::vector<uint8_t> pixels(size_t(width) * height * 4);
+
+    // BGRA with row padding -> tightly packed, opaque RGBA.
+    auto mapped = (const uint8_t*)g_screenshotBuffer->map();
+    for (uint32_t y = 0; y < height; y++)
+    {
+        auto src = mapped + size_t(y) * g_screenshotRowWidth * 4;
+        auto dst = pixels.data() + size_t(y) * width * 4;
+
+        for (uint32_t x = 0; x < width; x++)
+        {
+            dst[x * 4 + 0] = src[x * 4 + 2];
+            dst[x * 4 + 1] = src[x * 4 + 1];
+            dst[x * 4 + 2] = src[x * 4 + 0];
+            dst[x * 4 + 3] = 0xFF;
+        }
+    }
+    g_screenshotBuffer->unmap();
+    g_screenshotBuffer.reset();
+
+    std::thread([width, height, pixels = std::move(pixels)]()
+    {
+        auto directory = GetScreenshotDirectory();
+        std::error_code ec;
+        std::filesystem::create_directories(directory, ec);
+
+        auto time = std::time(nullptr);
+        char name[64];
+        std::strftime(name, sizeof(name), "Unleashed Recompiled %Y-%m-%d at %H.%M.%S.png", std::localtime(&time));
+
+        // One encode for both the file and the thumbnail texture.
+        int pngSize = 0;
+        auto png = stbi_write_png_to_mem(pixels.data(), width * 4, width, height, 4, &pngSize);
+        auto path = directory / name;
+
+        if (!png || !std::ofstream(path, std::ios::binary).write((const char*)png, pngSize))
+        {
+            LOGFN_ERROR("Failed to save screenshot to {}", path.string());
+            free(png);
+            return;
+        }
+
+        LOGFN("Saved screenshot to {}", path.string());
+        ScreenshotToast::Show(LoadTexture(png, pngSize), float(width) / float(height));
+        free(png);
+    }).detach();
+}
+
+void Video::RequestScreenshot()
+{
+    g_isScreenshotRequested = true;
+}
+
 static void ProcExecuteCommandList(const RenderCommand& cmd)
 {    
     if (g_swapChainValid)
@@ -2963,6 +3045,22 @@ static void ProcExecuteCommandList(const RenderCommand& cmd)
             constants.viewportOffsetY = (int32_t(g_swapChain->getHeight()) - int32_t(Video::s_viewportHeight)) / 2;
             constants.viewportWidth = Video::s_viewportWidth;
             constants.viewportHeight = Video::s_viewportHeight;
+
+            if (g_isScreenshotFrame)
+            {
+                // Copy the frame (before brightness and colour correction) into a readback buffer.
+                uint32_t width = g_intermediaryBackBufferTextureWidth;
+                uint32_t height = g_intermediaryBackBufferTextureHeight;
+                g_screenshotRowWidth = (width + 63) & ~63u;
+                g_screenshotBuffer = g_device->createBuffer(RenderBufferDesc::ReadbackBuffer(uint64_t(g_screenshotRowWidth) * height * 4));
+
+                auto& copyCommandList = g_commandLists[g_frame];
+                copyCommandList->barriers(RenderBarrierStage::ALL, RenderTextureBarrier(g_intermediaryBackBufferTexture.get(), RenderTextureLayout::COPY_SOURCE));
+                copyCommandList->copyTextureRegion(
+                    RenderTextureCopyLocation::PlacedFootprint(g_screenshotBuffer.get(), BACKBUFFER_FORMAT, width, height, 1, g_screenshotRowWidth, 0),
+                    RenderTextureCopyLocation::Subresource(g_intermediaryBackBufferTexture.get(), 0));
+                copyCommandList->barriers(RenderBarrierStage::ALL, RenderTextureBarrier(g_intermediaryBackBufferTexture.get(), RenderTextureLayout::SHADER_READ));
+            }
 
             auto &framebuffer = g_backBuffer->framebuffers[swapChainTexture];
             if (!framebuffer)
@@ -3020,6 +3118,17 @@ static void ProcExecuteCommandList(const RenderCommand& cmd)
     }
 
     g_commandListStates[g_frame] = true;
+
+    if (g_isScreenshotFrame && g_screenshotBuffer)
+    {
+        // One-frame hitch: wait for this frame, then hand the pixels to a thread that writes the PNG.
+        g_queue->waitForCommandFence(g_commandFences[g_frame].get());
+        g_commandListStates[g_frame] = false;
+
+        SaveScreenshot();
+    }
+
+    g_isScreenshotFrame = false;
 
     g_executedCommandList = true;
     g_executedCommandList.notify_one();

@@ -16,6 +16,7 @@
 #include <ui/button_guide.h>
 #include <ui/game_window.h>
 #include <ui/imgui_utils.h>
+#include <ui/message_window.h>
 #include <app.h>
 #include <decompressor.h>
 #include <exports.h>
@@ -59,7 +60,7 @@ static constexpr float PADDING_NARROW_GRID_COUNT = 1.0f;
 
 static constexpr float INFO_TEXT_MARQUEE_DELAY = 1.2f;
 
-static constexpr int32_t g_categoryCount = 4;
+static constexpr int32_t g_categoryCount = 5;
 static int32_t g_categoryIndex;
 static ImVec2 g_categoryAnimMin;
 static ImVec2 g_categoryAnimMax;
@@ -88,6 +89,7 @@ enum class EKeyCapture
 };
 
 static ConfigDef<SDL_Scancode>* g_capturingKey;
+static ConfigDef<SDL_GameControllerButton>* g_capturingPad;
 static EKeyCapture g_keyCapture;
 static double g_lockedOnTime;
 static double g_lastTappedTime;
@@ -110,6 +112,11 @@ static bool g_isClosing = false;
 static bool g_isControlsVisible = false;
 static bool g_isEnterKeyBuffered = false;
 static bool g_canReset = false;
+
+// "Reset tab" confirmation. While it's open the options menu ignores input.
+static bool g_isPromptOpen = false;
+static int g_promptResult = -1;
+static std::vector<std::function<void()>> g_tabResetters;
 static bool g_isLanguageOptionChanged = false;
 static bool g_titleAnimBegin = true;
 static EChannelConfiguration g_currentChannelConfig;
@@ -458,6 +465,7 @@ static std::string& GetCategory(int index)
         case 1: return Localise("Options_Category_Input");
         case 2: return Localise("Options_Category_Audio");
         case 3: return Localise("Options_Category_Video");
+        case 4: return Localise("Options_Category_Codes");
     }
 
     return g_localeMissing;
@@ -466,6 +474,7 @@ static std::string& GetCategory(int index)
 static void ResetSelection()
 {
     g_capturingKey = nullptr;
+    g_capturingPad = nullptr;
     g_keyCapture = EKeyCapture::None;
     g_firstVisibleRowIndex = 0;
     g_selectedRowIndex = 0;
@@ -493,15 +502,15 @@ static bool DrawCategories()
     // Left/right (arrow keys, D-pad, left stick) also switch tabs; they're unused on rows until one is locked on.
     static bool s_tabLeftWasHeld;
     static bool s_tabRightWasHeld;
-    bool tabLeftIsHeld = !g_lockedOnOption && (padState.IsDown(SWA::eKeyState_DpadLeft) || padState.LeftStickHorizontal < -0.5f);
-    bool tabRightIsHeld = !g_lockedOnOption && (padState.IsDown(SWA::eKeyState_DpadRight) || padState.LeftStickHorizontal > 0.5f);
+    bool tabLeftIsHeld = !g_lockedOnOption && !g_isPromptOpen && (padState.IsDown(SWA::eKeyState_DpadLeft) || padState.LeftStickHorizontal < -0.5f);
+    bool tabRightIsHeld = !g_lockedOnOption && !g_isPromptOpen && (padState.IsDown(SWA::eKeyState_DpadRight) || padState.LeftStickHorizontal > 0.5f);
     bool tabLeftTapped = tabLeftIsHeld && !s_tabLeftWasHeld;
     bool tabRightTapped = tabRightIsHeld && !s_tabRightWasHeld;
     s_tabLeftWasHeld = tabLeftIsHeld;
     s_tabRightWasHeld = tabRightIsHeld;
 
-    bool moveLeft = !g_lockedOnOption && (padState.IsTapped(SWA::eKeyState_LeftBumper) || tabLeftTapped);
-    bool moveRight = !g_lockedOnOption && (padState.IsTapped(SWA::eKeyState_RightBumper) || tabRightTapped);
+    bool moveLeft = !g_lockedOnOption && !g_isPromptOpen && (padState.IsTapped(SWA::eKeyState_LeftBumper) || tabLeftTapped);
+    bool moveRight = !g_lockedOnOption && !g_isPromptOpen && (padState.IsTapped(SWA::eKeyState_RightBumper) || tabRightTapped);
 
     if (moveLeft)
     {
@@ -825,22 +834,26 @@ static bool IsAnyKeyDown()
 // tab and close navigation all stay blocked until the capture ends.
 static void UpdateKeyCapture()
 {
+    // Controller captures also wait for every controller button to be let go.
+    auto isAnyInputDown = []() { return IsAnyKeyDown() || (g_capturingPad && hid::GetPressedControllerButton() >= 0); };
+
     switch (g_keyCapture)
     {
         case EKeyCapture::None:
             return;
 
         case EKeyCapture::WaitForReleaseBefore:
-            if (!IsAnyKeyDown())
+            if (!isAnyInputDown())
                 g_keyCapture = EKeyCapture::Listening;
 
             return;
 
         case EKeyCapture::WaitForReleaseAfter:
-            if (!IsAnyKeyDown())
+            if (!isAnyInputDown())
             {
                 g_keyCapture = EKeyCapture::None;
                 g_capturingKey = nullptr;
+                g_capturingPad = nullptr;
                 g_lockedOnOption = false;
             }
 
@@ -856,6 +869,17 @@ static void UpdateKeyCapture()
     if (keys[SDL_SCANCODE_ESCAPE] || g_mouseRightClicked)
     {
         Game_PlaySound("sys_worldmap_cansel");
+    }
+    else if (g_capturingPad)
+    {
+        auto button = hid::GetPressedControllerButton();
+
+        // Only buttons the config file can store are accepted.
+        if (button < 0 || !g_capturingPad->EnumTemplateReverse.contains(SDL_GameControllerButton(button)))
+            return;
+
+        g_capturingPad->Value = SDL_GameControllerButton(button);
+        Game_PlaySound("sys_worldmap_finaldecide");
     }
     else
     {
@@ -888,6 +912,27 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
     constexpr bool IS_SLIDER_TYPE = std::is_same_v<T, float> || std::is_same_v<T, int32_t>;
 
     auto isValueSlider = IS_SLIDER_TYPE && isSlider;
+
+    // Same exclusions as the per-option reset: language and window size/monitor stay as they are.
+    if (isAccessible && config->GetName().find("Language") == std::string::npos &&
+        (IConfigDef*)config != &Config::WindowSize && (IConfigDef*)config != &Config::Monitor)
+    {
+        g_tabResetters.emplace_back([config]
+        {
+            if (config->IsDefaultValue())
+                return;
+
+            config->MakeDefault();
+
+            VideoConfigValueChangedCallback(config);
+
+            if (config->Callback)
+                config->Callback(config);
+
+            if (config->ApplyCallback)
+                config->ApplyCallback(config);
+        });
+    }
     auto gridSize = Scale(GRID_SIZE);
     auto optionWidth = gridSize * floor(Lerp(OPTION_NARROW_GRID_COUNT, OPTION_WIDE_GRID_COUNT, g_aspectRatioNarrowScale));
     auto optionHeight = gridSize * 5.5f;
@@ -928,15 +973,19 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
         g_selectedItem = config;
         g_inaccessibleReason = isAccessible ? nullptr : inaccessibleReason;
 
-        if (!g_isEnterKeyBuffered)
+        if (!g_isEnterKeyBuffered && !g_isPromptOpen)
         {
             if (isAccessible)
             {
-                if constexpr (std::is_same_v<T, SDL_Scancode>)
+                if constexpr (std::is_same_v<T, SDL_Scancode> || std::is_same_v<T, SDL_GameControllerButton>)
                 {
-                    if (isAcceptTapped && !g_capturingKey)
+                    if (isAcceptTapped && !g_capturingKey && !g_capturingPad)
                     {
-                        g_capturingKey = config;
+                        if constexpr (std::is_same_v<T, SDL_Scancode>)
+                            g_capturingKey = config;
+                        else
+                            g_capturingPad = config;
+
                         g_keyCapture = EKeyCapture::WaitForReleaseBefore;
                         g_lockedOnOption = true;
                         g_lockedOnTime = ImGui::GetTime();
@@ -1007,7 +1056,7 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
                     lockedOnOption = g_lockedOnOption;
                 }
 
-                if (g_canReset && !g_capturingKey && padState.IsTapped(SWA::eKeyState_X))
+                if (g_canReset && !g_capturingKey && !g_capturingPad && padState.IsTapped(SWA::eKeyState_X))
                 {
                     if (!config->IsDefaultValue())
                     {
@@ -1059,6 +1108,7 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
 
         // large
         g_canReset = g_isControlsVisible &&
+            !g_isPromptOpen &&
             !g_lockedOnOption &&
             g_selectedItem->GetName().find("Language") == std::string::npos &&
             g_selectedItem != &Config::WindowSize &&
@@ -1340,6 +1390,12 @@ static void DrawConfigOption(int32_t rowIndex, float yOffset, ConfigDef<T>* conf
             ? "PRESS A KEY"
             : config->GetValueLocalised(Config::Language);
     }
+    else if constexpr (std::is_same_v<T, SDL_GameControllerButton>)
+    {
+        valueText = g_capturingPad == config && g_keyCapture != EKeyCapture::WaitForReleaseAfter
+            ? "PRESS A BUTTON"
+            : config->GetValueLocalised(Config::Language);
+    }
     else
     {
         valueText = config->GetValueLocalised(Config::Language);
@@ -1388,6 +1444,8 @@ static void DrawConfigOptions()
 {
     UpdateKeyCapture();
 
+    g_tabResetters.clear();
+
     auto drawList = ImGui::GetBackgroundDrawList();
     auto clipRectMin = drawList->GetClipRectMin();
     auto clipRectMax = drawList->GetClipRectMax();
@@ -1415,38 +1473,68 @@ static void DrawConfigOptions()
             DrawConfigOption(rowCount++, yOffset, &Config::Hints, !isStage, cmnReason);
             DrawConfigOption(rowCount++, yOffset, &Config::ControlTutorial, !isStage, cmnReason);
             DrawConfigOption(rowCount++, yOffset, &Config::AchievementNotifications, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::PauseOnFocusLoss, !Config::AllowBackgroundInput, &Localise("Options_Desc_NotAvailableBackgroundInput"));
             DrawConfigOption(rowCount++, yOffset, &Config::TimeOfDayTransition, !Config::UseArrowsForTimeOfDayTransition);
             break;
 
         case 1: // INPUT
+        {
             DrawConfigOption(rowCount++, yOffset, &Config::HorizontalCamera, true);
             DrawConfigOption(rowCount++, yOffset, &Config::VerticalCamera, true);
             DrawConfigOption(rowCount++, yOffset, &Config::Vibration, true);
             DrawConfigOption(rowCount++, yOffset, &Config::AllowBackgroundInput, true);
             DrawConfigOption(rowCount++, yOffset, &Config::ControllerIcons, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_A, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_B, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_X, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_Y, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftBumper, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightBumper, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftTrigger, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightTrigger, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_Start, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_Back, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickUp, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickDown, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickLeft, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickRight, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickUp, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickDown, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickLeft, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickRight, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadUp, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadDown, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadLeft, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadRight, true);
+
+            // Only the bindings for what's being used, keyboard or controller. Kept fixed while a
+            // binding is listening, since pressing Escape to cancel would otherwise switch lists.
+            static bool s_isShowingControllerBindings;
+            if (!g_capturingKey && !g_capturingPad)
+                s_isShowingControllerBindings = hid::IsInputDeviceController();
+
+            if (s_isShowingControllerBindings)
+            {
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_A, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_B, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_X, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_Y, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_LeftBumper, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_RightBumper, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_Start, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_Back, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_LeftStickClick, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_RightStickClick, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_DPadUp, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_DPadDown, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_DPadLeft, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Pad_DPadRight, true);
+            }
+            else
+            {
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_A, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_B, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_X, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_Y, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftBumper, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_RightBumper, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftTrigger, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_RightTrigger, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_Start, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_Back, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickUp, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickDown, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickLeft, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_LeftStickRight, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickUp, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickDown, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickLeft, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_RightStickRight, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadUp, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadDown, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadLeft, true);
+                DrawConfigOption(rowCount++, yOffset, &Config::Key_DPadRight, true);
+            }
             break;
+        }
 
         case 2: // AUDIO
             DrawConfigOption(rowCount++, yOffset, &Config::MasterVolume, true);
@@ -1487,10 +1575,6 @@ static void DrawConfigOptions()
             DrawConfigOption(rowCount++, yOffset, &Config::AspectRatio, true);
             DrawConfigOption(rowCount++, yOffset, &Config::ResolutionScale, true, nullptr, 0.25f, 1.0f, 2.0f);
             DrawConfigOption(rowCount++, yOffset, &Config::Fullscreen, true);
-#ifdef __APPLE__
-            DrawConfigOption(rowCount++, yOffset, &Config::HighDPI, true);
-            DrawConfigOption(rowCount++, yOffset, &Config::FullscreenMenuBar, Config::Fullscreen, &Localise("Options_Desc_NotAvailableWindowed"));
-#endif
             DrawConfigOption(rowCount++, yOffset, &Config::VSync, true);
             DrawConfigOption(rowCount++, yOffset, &Config::FPS, true, nullptr, FPS_MIN, 120, FPS_MAX);
             DrawConfigOption(rowCount++, yOffset, &Config::UnfocusedFPS, true, nullptr, FPS_MIN, 30, FPS_MAX);
@@ -1509,14 +1593,43 @@ static void DrawConfigOptions()
 
             break;
         }
+
+        case 4: // CODES
+            DrawConfigOption(rowCount++, yOffset, &Config::SkipIntroLogos, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::DisableAutoSaveWarning, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::HUDToggleKey, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::DisableBoostFilter, true);
+            // Read when the player is created, so it can't change mid-stage.
+            DrawConfigOption(rowCount++, yOffset, &Config::HomingAttackOnJump, !isStage, cmnReason);
+            DrawConfigOption(rowCount++, yOffset, &Config::DisableDPadMovement, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::AllowCancellingUnleash, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::FixUnleashOutOfControlDrain, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::SaveScoreAtCheckpoints, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::UseArrowsForTimeOfDayTransition, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::FixEggmanlandUsingEventGalleryTransition, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::DisableDLCIcon, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::UseAlternateTitle, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::UseOfficialTitleOnTitleBar, true);
+#ifdef __APPLE__
+            DrawConfigOption(rowCount++, yOffset, &Config::HighDPI, true);
+            DrawConfigOption(rowCount++, yOffset, &Config::FullscreenMenuBar, Config::Fullscreen, &Localise("Options_Desc_NotAvailableWindowed"));
+#endif
+            break;
+    }
+
+    // The Input tab's list gets shorter when switching from keyboard to controller.
+    if (g_selectedRowIndex >= rowCount)
+    {
+        g_selectedRowIndex = std::max(0, rowCount - 1);
+        g_firstVisibleRowIndex = std::min(g_firstVisibleRowIndex, g_selectedRowIndex);
     }
 
     auto inputState = SWA::CInputState::GetInstance();
 
-    bool upIsHeld = !g_lockedOnOption && (inputState->GetPadState().IsDown(SWA::eKeyState_DpadUp) ||
+    bool upIsHeld = !g_lockedOnOption && !g_isPromptOpen && (inputState->GetPadState().IsDown(SWA::eKeyState_DpadUp) ||
         inputState->GetPadState().LeftStickVertical > 0.5f);
 
-    bool downIsHeld = !g_lockedOnOption && (inputState->GetPadState().IsDown(SWA::eKeyState_DpadDown) ||
+    bool downIsHeld = !g_lockedOnOption && !g_isPromptOpen && (inputState->GetPadState().IsDown(SWA::eKeyState_DpadDown) ||
         inputState->GetPadState().LeftStickVertical < -0.5f);
 
     bool scrollUp = (!g_upWasHeld && upIsHeld) || (!g_lockedOnOption && g_mouseWheel > 0);
@@ -1638,6 +1751,56 @@ static void DrawConfigOptions()
     }
 }
 
+static void OpenButtonGuide()
+{
+    std::array<Button, 5> buttons =
+    {
+        Button("Common_Switch", 115.0f, EButtonIcon::LBRB, EButtonAlignment::Left, &g_isControlsVisible),
+        Button("Common_Reset", 110.0f, EButtonIcon::X, &g_canReset),
+        Button("Options_ResetTab", 130.0f, EButtonIcon::Y, &g_isControlsVisible),
+        Button("Common_Select", 115.0f, EButtonIcon::A, &g_isControlsVisible),
+        Button("Common_Back", 65.0f, EButtonIcon::B, &g_isControlsVisible)
+    };
+
+    ButtonGuide::Open(buttons);
+    ButtonGuide::SetSideMargins(250);
+}
+
+static void ProcessResetTabPrompt()
+{
+    auto& padState = SWA::CInputState::GetInstance()->GetPadState();
+
+    if (!g_isPromptOpen)
+    {
+        if (!g_isControlsVisible || g_lockedOnOption || g_capturingKey || g_capturingPad || g_isEnterKeyBuffered || !padState.IsTapped(SWA::eKeyState_Y))
+            return;
+
+        g_isPromptOpen = true;
+        Game_PlaySound("sys_worldmap_decide");
+    }
+
+    std::array<std::string, 2> options = { Localise("Common_Yes"), Localise("Common_No") };
+
+    if (MessageWindow::Open(Localise("Options_Message_ResetTab"), &g_promptResult, options, 1) == MSG_CLOSED)
+    {
+        if (g_promptResult == 0)
+        {
+            for (auto& reset : g_tabResetters)
+                reset();
+        }
+
+        g_isPromptOpen = false;
+        g_promptResult = -1;
+
+        // The message window replaced the button guide with its own.
+        OpenButtonGuide();
+
+        // Don't let the button that closed the prompt also press the selected option.
+        if (padState.IsDown(SWA::eKeyState_A))
+            g_isEnterKeyBuffered = true;
+    }
+}
+
 static void DrawSettingsPanel(ImVec2 settingsMin, ImVec2 settingsMax)
 {
     auto drawList = ImGui::GetBackgroundDrawList();
@@ -1648,6 +1811,7 @@ static void DrawSettingsPanel(ImVec2 settingsMin, ImVec2 settingsMax)
     if (DrawCategories())
     {
         DrawConfigOptions();
+        ProcessResetTabPrompt();
 
         g_isControlsVisible = true;
     }
@@ -1980,6 +2144,14 @@ void OptionsMenu::Draw()
         }
     } mouseReset;
 
+    if (g_isPromptOpen)
+    {
+        g_mouseMoved = false;
+        g_mouseLeftClicked = false;
+        g_mouseRightClicked = false;
+        g_mouseWheel = 0;
+    }
+
     // We've entered the menu now, no need to check this.
     auto pInputState = SWA::CInputState::GetInstance();
     if (pInputState->GetPadState().IsReleased(SWA::eKeyState_A))
@@ -2051,16 +2223,7 @@ void OptionsMenu::Open(bool isPause, SWA::EMenuType pauseMenuType)
     ResetSelection();
     SetOptionsMenuVisible(true);
 
-    std::array<Button, 4> buttons =
-    {
-        Button("Common_Switch", 115.0f, EButtonIcon::LBRB, EButtonAlignment::Left, &g_isControlsVisible),
-        Button("Common_Reset", 110.0f, EButtonIcon::X, &g_canReset),
-        Button("Common_Select", 115.0f, EButtonIcon::A, &g_isControlsVisible),
-        Button("Common_Back", 65.0f, EButtonIcon::B, &g_isControlsVisible)
-    };
-    
-    ButtonGuide::Open(buttons);
-    ButtonGuide::SetSideMargins(250);
+    OpenButtonGuide();
 
     hid::SetProhibitedInputs(XAMINPUT_GAMEPAD_START, false, true);
 }
@@ -2084,7 +2247,16 @@ void OptionsMenu::Close()
         SetOptionsMenuVisible(false);
 }
 
+bool OptionsMenu::ConsumeOpenRequest()
+{
+    if (s_isVisible || App::s_time - s_openRequestTime > 2.0)
+        return false;
+
+    s_openRequestTime = -1.0;
+    return true;
+}
+
 bool OptionsMenu::CanClose()
 {
-    return !g_lockedOnOption && g_isControlsVisible;
+    return !g_lockedOnOption && !g_isPromptOpen && g_isControlsVisible;
 }

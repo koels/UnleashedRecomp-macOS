@@ -9,6 +9,7 @@
 #include <SDL_syswm.h>
 #ifdef __APPLE__
 #include <os/macos/fullscreen_macos.h>
+#include <os/macos/menu_macos.h>
 #include <plume_apple.h>
 #endif
 
@@ -52,10 +53,20 @@ int Window_OnSDLEvent(void*, SDL_Event* event)
         {
             switch (event->key.keysym.sym)
             {
-                // Toggle fullscreen on ALT+ENTER.
+                // Toggle fullscreen on ALT+ENTER, or CMD+F on macOS.
                 case SDLK_RETURN:
+                case SDLK_f:
                 {
-                    if (!(event->key.keysym.mod & KMOD_ALT) || !m_isFullscreenKeyReleased)
+                    bool isCmdF = event->key.keysym.sym == SDLK_f;
+
+#ifndef __APPLE__
+                    if (isCmdF)
+                        break;
+#endif
+
+                    // macOS doesn't send key-up for Cmd+letter, so Cmd+F ignores repeats instead of waiting for release.
+                    if (isCmdF ? (!(event->key.keysym.mod & KMOD_GUI) || event->key.repeat)
+                               : (!(event->key.keysym.mod & KMOD_ALT) || !m_isFullscreenKeyReleased))
                         break;
 
                     Config::Fullscreen = GameWindow::SetFullscreen(!GameWindow::IsFullscreen());
@@ -70,8 +81,28 @@ int Window_OnSDLEvent(void*, SDL_Event* event)
                     }
 
                     // Block holding ALT+ENTER spamming window changes.
-                    m_isFullscreenKeyReleased = false;
+                    if (!isCmdF)
+                        m_isFullscreenKeyReleased = false;
 
+                    break;
+                }
+
+                // Screenshot on F12, or CMD+SHIFT+S on macOS.
+                case SDLK_F12:
+                case SDLK_s:
+                {
+                    if (event->key.repeat)
+                        break;
+
+                    if (event->key.keysym.sym == SDLK_s)
+                    {
+#ifdef __APPLE__
+                        if ((event->key.keysym.mod & KMOD_GUI) == 0 || (event->key.keysym.mod & KMOD_SHIFT) == 0)
+#endif
+                            break;
+                    }
+
+                    Video::RequestScreenshot();
                     break;
                 }
 
@@ -113,6 +144,10 @@ int Window_OnSDLEvent(void*, SDL_Event* event)
             {
                 case SDL_WINDOWEVENT_FOCUS_LOST:
                     GameWindow::s_isFocused = false;
+
+                    if (Config::PauseOnFocusLoss && !Config::AllowBackgroundInput && GameWindow::s_isGameplay)
+                        GameWindow::s_pauseRequestTime = App::s_time;
+
                     SDL_ShowCursor(SDL_ENABLE);
                     break;
 
@@ -205,6 +240,17 @@ void GameWindow::Init(const char* sdlVideoDriver)
         SDL_ShowCursor(s_isFullscreenCursorVisible ? SDL_ENABLE : SDL_DISABLE);
 
     SetDisplay(Config::Monitor);
+
+    // Match the frame rate cap to the display (e.g. 120 on ProMotion) unless the player picked one.
+    SDL_DisplayMode displayMode;
+    if (SDL_GetCurrentDisplayMode(GetDisplay(), &displayMode) == 0 && displayMode.refresh_rate > 0)
+    {
+        Config::FPS.DefaultValue = std::clamp(displayMode.refresh_rate, FPS_MIN, FPS_MAX - 1);
+
+        if (!Config::FPS.IsLoadedFromConfig)
+            Config::FPS = Config::FPS.DefaultValue;
+    }
+
     SetIcon();
     SetTitle();
 
@@ -228,6 +274,7 @@ void GameWindow::Init(const char* sdlVideoDriver)
     s_renderWindow = { info.info.x11.display, info.info.x11.window };
 #elif defined(__APPLE__)
     s_renderWindow.window = info.info.cocoa.window;
+    os::macos::AddAppMenuItems();
     s_renderWindow.view = SDL_Metal_GetLayer(SDL_Metal_CreateView(s_pWindow));
 #else
     static_assert(false, "Unknown platform.");

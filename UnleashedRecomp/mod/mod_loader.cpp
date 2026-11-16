@@ -217,6 +217,8 @@ void ModLoader::Init()
             g_mods.emplace_back(std::move(mod));
     }
 
+    LOGF_IMPL(Utility, "Mod Loader", "Loaded {} of {} active mods", g_mods.size(), activeModCount);
+
     auto codeCount = modsDbIni.get<size_t>("Codes", "CodeCount", 0);
 
     if (codeCount)

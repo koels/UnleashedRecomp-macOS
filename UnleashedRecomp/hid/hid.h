@@ -46,4 +46,7 @@ namespace hid
     void SetProhibitedInputs(uint16_t wButtons = 0, bool leftStick = false, bool rightStick = false);
     bool IsInputAllowed();
     bool IsInputDeviceController();
+
+    // First physical button held on any controller (SDL_GameControllerButton), or -1.
+    int GetPressedControllerButton();
 }

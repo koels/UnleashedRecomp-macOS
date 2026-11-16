@@ -27,6 +27,7 @@ public:
     // Last App::s_time at which actual gameplay (stage running, not paused) was observed.
     static inline double s_lastGameplayTime = -1.0;
     static inline bool s_isGameplay = false;
+    static inline double s_pauseRequestTime = -1.0;
 
     // Last App::s_time at which the title screen (intro, autosave notice or menu) was updating.
     static inline double s_lastTitleTime = -1.0;

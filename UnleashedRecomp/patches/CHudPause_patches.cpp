@@ -171,6 +171,19 @@ PPC_FUNC(sub_824B0930)
     {
         g_achievementMenuIntroTime = 0;
 
+        // Settings... in the menu bar: open Options as if it was picked from the pause menu.
+        if (pHudPause->m_IsShown && !pHudPause->m_Submenu && pHudPause->m_Transition == SWA::eTransitionType_Undefined &&
+            OptionsMenu::ConsumeOpenRequest())
+        {
+            OptionsMenu::Open(true, pHudPause->m_Menu);
+
+            pHudPause->m_Action = SWA::eActionType_Undefined;
+            pHudPause->m_Transition = SWA::eTransitionType_Hide;
+
+            if (pHudPause->m_rcBg1Select)
+                pHudPause->m_rcBg1Select->SetHideFlag(true);
+        }
+
         if (*SWA::SGlobals::ms_IsRenderHud && pHudPause->m_IsShown && !pHudPause->m_Submenu && pHudPause->m_Transition == SWA::eTransitionType_Undefined)
         {
             ButtonGuide::Open(Button("Achievements_Name", FLT_MAX, EButtonIcon::Back, EButtonAlignment::Left, EFontQuality::Low));

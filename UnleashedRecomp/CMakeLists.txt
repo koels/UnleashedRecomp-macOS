@@ -102,12 +102,18 @@ elseif (APPLE)
         "os/macos/discord_macos.cpp"
         "os/macos/fullscreen_macos.mm"
         "os/macos/logger_macos.cpp"
+        "os/macos/menu_bridge.cpp"
+        "os/macos/menu_macos.mm"
+        "os/macos/mod_manager_macos.mm"
         "os/macos/media_macos.cpp"
         "os/macos/power_macos.mm"
         "os/macos/process_macos.cpp"
         "os/macos/user_macos.cpp"
         "os/macos/version_macos.cpp"
     )
+
+    # The rest of the game's Objective-C++ is manual retain/release; the Mods window relies on ARC.
+    set_source_files_properties("os/macos/mod_manager_macos.mm" PROPERTIES COMPILE_OPTIONS "-fobjc-arc" SKIP_PRECOMPILE_HEADERS ON)
 endif()
 
 set(UNLEASHED_RECOMP_CPU_CXX_SOURCES
@@ -163,6 +169,7 @@ set(UNLEASHED_RECOMP_UI_CXX_SOURCES
     "ui/message_window.cpp"
     "ui/options_menu.cpp"
     "ui/options_menu_thumbnails.cpp"
+    "ui/screenshot_toast.cpp"
     "ui/tv_static.cpp"
 )
 

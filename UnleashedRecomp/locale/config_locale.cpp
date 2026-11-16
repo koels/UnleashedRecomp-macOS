@@ -1165,3 +1165,148 @@ CONFIG_DEFINE_ENUM_LOCALE(EUIAlignmentMode)
         }
     }
 };
+
+CONFIG_DEFINE_LOCALE(PauseOnFocusLoss)
+{
+    { ELanguage::English, { "Pause When Unfocused", "Pause the game when you switch to another app during gameplay." } }
+};
+
+CONFIG_DEFINE_LOCALE(SkipIntroLogos)
+{
+    { ELanguage::English, { "Skip Intro Logos", "Skip the publisher and developer logos when the game starts.\n\nThis option will apply the next time the game starts." } }
+};
+
+CONFIG_DEFINE_LOCALE(DisableAutoSaveWarning)
+{
+    { ELanguage::English, { "Skip Autosave Warning", "Skip the autosave warning screen when the game starts.\n\nThis option will apply the next time the game starts." } }
+};
+
+CONFIG_DEFINE_LOCALE(HUDToggleKey)
+{
+    { ELanguage::English, { "HUD Toggle Key", "Press F8 to hide or show the HUD, for screenshots and recordings." } }
+};
+
+CONFIG_DEFINE_LOCALE(DisableBoostFilter)
+{
+    { ELanguage::English, { "Disable Boost Filter", "Remove the blur and colour filter that appears while boosting." } }
+};
+
+CONFIG_DEFINE_LOCALE(HomingAttackOnJump)
+{
+    { ELanguage::English, { "Homing Attack on Jump", "Perform the homing attack with the jump button instead of the boost button." } }
+};
+
+CONFIG_DEFINE_LOCALE(DisableDPadMovement)
+{
+    { ELanguage::English, { "Disable D-Pad Movement", "Stop the D-Pad from moving the player, so only the left stick moves." } }
+};
+
+CONFIG_DEFINE_LOCALE(AllowCancellingUnleash)
+{
+    { ELanguage::English, { "Allow Cancelling Unleash", "Press the Unleash button again to end the Werehog's Unleash early. Part of the remaining gauge is kept." } }
+};
+
+CONFIG_DEFINE_LOCALE(FixUnleashOutOfControlDrain)
+{
+    { ELanguage::English, { "Fix Unleash Drain", "Stop the Werehog's Unleash gauge from draining while the player is out of your control." } }
+};
+
+CONFIG_DEFINE_LOCALE(SaveScoreAtCheckpoints)
+{
+    { ELanguage::English, { "Save Score at Checkpoints", "Keep the score you had at the last checkpoint when you lose a life, instead of resetting it." } }
+};
+
+CONFIG_DEFINE_LOCALE(UseArrowsForTimeOfDayTransition)
+{
+    { ELanguage::English, { "Arrow Transition", "Use the arrows loading screen when switching between Sonic and the Werehog.\n\nOverrides the Time of Day Transition option." } }
+};
+
+CONFIG_DEFINE_LOCALE(FixEggmanlandUsingEventGalleryTransition)
+{
+    { ELanguage::English, { "Fix Eggmanland Restart", "Use the normal loading screen when restarting Eggmanland as the Werehog, instead of the Event Gallery one." } }
+};
+
+CONFIG_DEFINE_LOCALE(DisableDLCIcon)
+{
+    { ELanguage::English, { "Hide DLC Icon", "Hide the DLC icon in stage and hub menus." } }
+};
+
+CONFIG_DEFINE_LOCALE(UseAlternateTitle)
+{
+    { ELanguage::English, { "Alternate Title", "Swap the game's title between Sonic Unleashed and Sonic World Adventure." } }
+};
+
+CONFIG_DEFINE_LOCALE(UseOfficialTitleOnTitleBar)
+{
+    { ELanguage::English, { "Official Title in Title Bar", "Show the game's official title in the window title bar." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_A)
+{
+    { ELanguage::English, { "Controller A", "Select, then press the controller button to use for A Button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_B)
+{
+    { ELanguage::English, { "Controller B", "Select, then press the controller button to use for B Button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_X)
+{
+    { ELanguage::English, { "Controller X", "Select, then press the controller button to use for X Button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_Y)
+{
+    { ELanguage::English, { "Controller Y", "Select, then press the controller button to use for Y Button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_LeftBumper)
+{
+    { ELanguage::English, { "Controller Left Bumper", "Select, then press the controller button to use for Left Bumper. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_RightBumper)
+{
+    { ELanguage::English, { "Controller Right Bumper", "Select, then press the controller button to use for Right Bumper. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_Start)
+{
+    { ELanguage::English, { "Controller Start", "Select, then press the controller button to use for Start Button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_Back)
+{
+    { ELanguage::English, { "Controller Back", "Select, then press the controller button to use for Back Button. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_LeftStickClick)
+{
+    { ELanguage::English, { "Controller Left Stick Click", "Select, then press the controller button to use for Left Stick Click. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_RightStickClick)
+{
+    { ELanguage::English, { "Controller Right Stick Click", "Select, then press the controller button to use for Right Stick Click. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_DPadUp)
+{
+    { ELanguage::English, { "Controller D-Pad Up", "Select, then press the controller button to use for D-Pad Up. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_DPadDown)
+{
+    { ELanguage::English, { "Controller D-Pad Down", "Select, then press the controller button to use for D-Pad Down. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_DPadLeft)
+{
+    { ELanguage::English, { "Controller D-Pad Left", "Select, then press the controller button to use for D-Pad Left. Press Escape to cancel." } }
+};
+
+CONFIG_DEFINE_LOCALE(Pad_DPadRight)
+{
+    { ELanguage::English, { "Controller D-Pad Right", "Select, then press the controller button to use for D-Pad Right. Press Escape to cancel." } }
+};

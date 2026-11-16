@@ -99,12 +99,20 @@ PPC_FUNC(sub_825882B8)
 
     auto pInputState = SWA::CInputState::GetInstance();
     auto& pPadState = pInputState->GetPadState();
-    auto isAccepted = pPadState.IsTapped(SWA::eKeyState_A) || pPadState.IsTapped(SWA::eKeyState_Start);
+    bool isAccepted = pPadState.IsTapped(SWA::eKeyState_A) || pPadState.IsTapped(SWA::eKeyState_Start);
 
     auto pContext = pTitleStateMenu->GetContextBase<SWA::CTitleStateMenu::CTitleStateMenuContext>();
     auto isNewGameIndex = pContext->m_pTitleMenu->m_CursorIndex == 0;
-    auto isOptionsIndex = pContext->m_pTitleMenu->m_CursorIndex == 2;
+    bool isOptionsIndex = pContext->m_pTitleMenu->m_CursorIndex == 2;
     auto isInstallIndex = pContext->m_pTitleMenu->m_CursorIndex == 3;
+
+    // Settings... in the menu bar: jump to Options and open it.
+    if (!OptionsMenu::s_isRestartRequired && OptionsMenu::ConsumeOpenRequest())
+    {
+        pContext->m_pTitleMenu->m_CursorIndex = 2;
+        isOptionsIndex = true;
+        isAccepted = true;
+    }
 
     // Always default to New Game with corrupted save data.
     if (App::s_isSaveDataCorrupt && pContext->m_pTitleMenu->m_CursorIndex == 1)

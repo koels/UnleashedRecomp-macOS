@@ -1,13 +1,23 @@
 #include "update_checker.h"
 
+#import <AppKit/AppKit.h>
 #import <Sparkle/Sparkle.h>
 
 #include <os/logger.h>
+#include <version.h>
+#include <SDL.h>
 
 // UpdateChecker backed by Sparkle. The title screen asks check() for the result of a silent
 // background probe, and install() downloads and installs it with no Sparkle UI.
 
 static std::atomic<UpdateChecker::Result> g_result = UpdateChecker::Result::NotStarted;
+
+// Set by checkFromMenu(); the next result is answered with an alert.
+static bool g_isMenuCheckPending = false;
+
+static void ShowMenuCheckResult(SUAppcastItem* item, NSError* error);
+
+static bool IsInstalling();
 
 @interface UpdateCheckerDelegate : NSObject <SPUUpdaterDelegate>
 @end
@@ -18,11 +28,13 @@ static std::atomic<UpdateChecker::Result> g_result = UpdateChecker::Result::NotS
 {
     LOGF_IMPL(Utility, "Sparkle", "Update available: {}", item.displayVersionString.UTF8String);
     g_result = UpdateChecker::Result::UpdateAvailable;
+    ShowMenuCheckResult(item, nil);
 }
 
 - (void)updaterDidNotFindUpdate:(SPUUpdater *)updater error:(NSError *)error
 {
     g_result = UpdateChecker::Result::AlreadyUpToDate;
+    ShowMenuCheckResult(nil, nil);
 }
 
 - (void)updater:(SPUUpdater *)updater didAbortWithError:(NSError *)error
@@ -32,6 +44,7 @@ static std::atomic<UpdateChecker::Result> g_result = UpdateChecker::Result::NotS
     {
         LOGF_IMPL(Utility, "Sparkle", "Update check failed: {}", error.localizedDescription.UTF8String);
         g_result = UpdateChecker::Result::Failed;
+        ShowMenuCheckResult(nil, error);
     }
 }
 
@@ -180,6 +193,10 @@ void UpdateChecker::install()
         return;
     }
 
+    // Already started, e.g. from the menu bar.
+    if (IsInstalling())
+        return;
+
     g_installState = InstallState::Downloading;
     [g_updater checkForUpdates];
 }
@@ -202,4 +219,76 @@ float UpdateChecker::installProgress()
         default:
             return 1.0f;
     }
+}
+
+// Runs a modal alert with the cursor shown, since gameplay hides it.
+static NSModalResponse RunAlert(NSString* message, NSString* information, NSArray<NSString*>* buttons)
+{
+    NSAlert* alert = [NSAlert new];
+    alert.messageText = message;
+    alert.informativeText = information;
+
+    for (NSString* button in buttons)
+        [alert addButtonWithTitle:button];
+
+    int wasCursorShown = SDL_ShowCursor(SDL_QUERY);
+    SDL_ShowCursor(SDL_ENABLE);
+
+    NSModalResponse response = [alert runModal];
+
+    SDL_ShowCursor(wasCursorShown);
+
+    return response;
+}
+
+static void ShowMenuCheckResult(SUAppcastItem* item, NSError* error)
+{
+    if (!g_isMenuCheckPending)
+        return;
+
+    g_isMenuCheckPending = false;
+
+    if (item)
+    {
+        NSString* message = [NSString stringWithFormat:@"Unleashed Recompiled %@ is available.", item.displayVersionString];
+        NSString* information = @"Install it now? It downloads in the background, then the game quits and restarts. Progress since your last save will be lost.";
+
+        if (RunAlert(message, information, @[ @"Install", @"Later" ]) == NSAlertFirstButtonReturn)
+            UpdateChecker::install();
+    }
+    else if (error)
+    {
+        RunAlert(@"Couldn't check for updates.", error.localizedDescription, @[ @"OK" ]);
+    }
+    else
+    {
+        NSString* information = [NSString stringWithFormat:@"%s is the latest version.", g_versionString];
+        RunAlert(@"You're up to date.", information, @[ @"OK" ]);
+    }
+}
+
+void UpdateChecker::checkFromMenu()
+{
+    if (!g_updater)
+    {
+        RunAlert(@"Update checks aren't available.", @"This build has no update feed.", @[ @"OK" ]);
+        return;
+    }
+
+    if (IsInstalling())
+    {
+        RunAlert(@"An update is already being installed.", @"The game will restart when it's ready.", @[ @"OK" ]);
+        return;
+    }
+
+    g_isMenuCheckPending = true;
+
+    // If the launch check is still running, its result answers this request.
+    start();
+}
+
+static bool IsInstalling()
+{
+    auto state = g_installState.load();
+    return state == UpdateChecker::InstallState::Downloading || state == UpdateChecker::InstallState::Extracting || state == UpdateChecker::InstallState::Installing;
 }

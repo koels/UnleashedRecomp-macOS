@@ -110,25 +110,28 @@ public:
 
         pad.wButtons = 0;
 
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_DPAD_UP, XAMINPUT_GAMEPAD_DPAD_UP);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_DPAD_DOWN, XAMINPUT_GAMEPAD_DPAD_DOWN);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_DPAD_LEFT, XAMINPUT_GAMEPAD_DPAD_LEFT);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, XAMINPUT_GAMEPAD_DPAD_RIGHT);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_DPadUp, XAMINPUT_GAMEPAD_DPAD_UP);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_DPadDown, XAMINPUT_GAMEPAD_DPAD_DOWN);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_DPadLeft, XAMINPUT_GAMEPAD_DPAD_LEFT);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_DPadRight, XAMINPUT_GAMEPAD_DPAD_RIGHT);
 
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_START, XAMINPUT_GAMEPAD_START);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_BACK, XAMINPUT_GAMEPAD_BACK);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_TOUCHPAD, XAMINPUT_GAMEPAD_BACK);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_Start, XAMINPUT_GAMEPAD_START);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_Back, XAMINPUT_GAMEPAD_BACK);
 
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_LEFTSTICK, XAMINPUT_GAMEPAD_LEFT_THUMB);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_RIGHTSTICK, XAMINPUT_GAMEPAD_RIGHT_THUMB);
+        // The touchpad doubles as Back unless Back has been rebound.
+        if (Config::Pad_Back == SDL_CONTROLLER_BUTTON_BACK)
+            pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_TOUCHPAD, XAMINPUT_GAMEPAD_BACK);
 
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_LEFTSHOULDER, XAMINPUT_GAMEPAD_LEFT_SHOULDER);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, XAMINPUT_GAMEPAD_RIGHT_SHOULDER);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_LeftStickClick, XAMINPUT_GAMEPAD_LEFT_THUMB);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_RightStickClick, XAMINPUT_GAMEPAD_RIGHT_THUMB);
 
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_A, XAMINPUT_GAMEPAD_A);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_B, XAMINPUT_GAMEPAD_B);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_X, XAMINPUT_GAMEPAD_X);
-        pad.wButtons |= TRANSLATE_INPUT(SDL_CONTROLLER_BUTTON_Y, XAMINPUT_GAMEPAD_Y);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_LeftBumper, XAMINPUT_GAMEPAD_LEFT_SHOULDER);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_RightBumper, XAMINPUT_GAMEPAD_RIGHT_SHOULDER);
+
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_A, XAMINPUT_GAMEPAD_A);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_B, XAMINPUT_GAMEPAD_B);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_X, XAMINPUT_GAMEPAD_X);
+        pad.wButtons |= TRANSLATE_INPUT(Config::Pad_Y, XAMINPUT_GAMEPAD_Y);
     }
 
     void SetVibration(const XAMINPUT_VIBRATION& vibration)
@@ -390,4 +393,21 @@ uint32_t hid::GetCapabilities(uint32_t dwUserIndex, XAMINPUT_CAPABILITIES* pCaps
     pCaps->Vibration = g_activeController->vibration;
 
     return ERROR_SUCCESS;
+}
+
+int hid::GetPressedControllerButton()
+{
+    for (auto& controller : g_controllers)
+    {
+        if (!controller.controller)
+            continue;
+
+        for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+        {
+            if (i != SDL_CONTROLLER_BUTTON_GUIDE && SDL_GameControllerGetButton(controller.controller, SDL_GameControllerButton(i)))
+                return i;
+        }
+    }
+
+    return -1;
 }

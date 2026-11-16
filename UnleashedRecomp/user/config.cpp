@@ -291,6 +291,31 @@ CONFIG_DEFINE_ENUM_TEMPLATE(SDL_Scancode)
     { "END CALL", SDL_SCANCODE_ENDCALL },
 };
 
+// Physical controller buttons, named by position on an Xbox layout (A is the bottom face button).
+CONFIG_DEFINE_ENUM_TEMPLATE(SDL_GameControllerButton)
+{
+    { "A", SDL_CONTROLLER_BUTTON_A },
+    { "B", SDL_CONTROLLER_BUTTON_B },
+    { "X", SDL_CONTROLLER_BUTTON_X },
+    { "Y", SDL_CONTROLLER_BUTTON_Y },
+    { "BACK", SDL_CONTROLLER_BUTTON_BACK },
+    { "START", SDL_CONTROLLER_BUTTON_START },
+    { "LS", SDL_CONTROLLER_BUTTON_LEFTSTICK },
+    { "RS", SDL_CONTROLLER_BUTTON_RIGHTSTICK },
+    { "LB", SDL_CONTROLLER_BUTTON_LEFTSHOULDER },
+    { "RB", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER },
+    { "D-PAD UP", SDL_CONTROLLER_BUTTON_DPAD_UP },
+    { "D-PAD DOWN", SDL_CONTROLLER_BUTTON_DPAD_DOWN },
+    { "D-PAD LEFT", SDL_CONTROLLER_BUTTON_DPAD_LEFT },
+    { "D-PAD RIGHT", SDL_CONTROLLER_BUTTON_DPAD_RIGHT },
+    { "MISC", SDL_CONTROLLER_BUTTON_MISC1 },
+    { "PADDLE 1", SDL_CONTROLLER_BUTTON_PADDLE1 },
+    { "PADDLE 2", SDL_CONTROLLER_BUTTON_PADDLE2 },
+    { "PADDLE 3", SDL_CONTROLLER_BUTTON_PADDLE3 },
+    { "PADDLE 4", SDL_CONTROLLER_BUTTON_PADDLE4 },
+    { "TOUCHPAD", SDL_CONTROLLER_BUTTON_TOUCHPAD }
+};
+
 CONFIG_DEFINE_ENUM_TEMPLATE(EChannelConfiguration)
 {
     { "Stereo",   EChannelConfiguration::Stereo },
@@ -782,6 +807,20 @@ extern CONFIG_LOCALE g_Key_DPadUp_locale;
 extern CONFIG_LOCALE g_Key_DPadDown_locale;
 extern CONFIG_LOCALE g_Key_DPadLeft_locale;
 extern CONFIG_LOCALE g_Key_DPadRight_locale;
+extern CONFIG_LOCALE g_Pad_A_locale;
+extern CONFIG_LOCALE g_Pad_B_locale;
+extern CONFIG_LOCALE g_Pad_X_locale;
+extern CONFIG_LOCALE g_Pad_Y_locale;
+extern CONFIG_LOCALE g_Pad_LeftBumper_locale;
+extern CONFIG_LOCALE g_Pad_RightBumper_locale;
+extern CONFIG_LOCALE g_Pad_Start_locale;
+extern CONFIG_LOCALE g_Pad_Back_locale;
+extern CONFIG_LOCALE g_Pad_LeftStickClick_locale;
+extern CONFIG_LOCALE g_Pad_RightStickClick_locale;
+extern CONFIG_LOCALE g_Pad_DPadUp_locale;
+extern CONFIG_LOCALE g_Pad_DPadDown_locale;
+extern CONFIG_LOCALE g_Pad_DPadLeft_locale;
+extern CONFIG_LOCALE g_Pad_DPadRight_locale;
 
 extern void VideoConfigValueChangedCallback(class IConfigDef* config);
 
@@ -855,6 +894,22 @@ void Config::CreateCallbacks()
     Config::Key_DPadDown.Locale = &g_Key_DPadDown_locale;
     Config::Key_DPadLeft.Locale = &g_Key_DPadLeft_locale;
     Config::Key_DPadRight.Locale = &g_Key_DPadRight_locale;
+
+    // Display names for the controller bindings.
+    Config::Pad_A.Locale = &g_Pad_A_locale;
+    Config::Pad_B.Locale = &g_Pad_B_locale;
+    Config::Pad_X.Locale = &g_Pad_X_locale;
+    Config::Pad_Y.Locale = &g_Pad_Y_locale;
+    Config::Pad_LeftBumper.Locale = &g_Pad_LeftBumper_locale;
+    Config::Pad_RightBumper.Locale = &g_Pad_RightBumper_locale;
+    Config::Pad_Start.Locale = &g_Pad_Start_locale;
+    Config::Pad_Back.Locale = &g_Pad_Back_locale;
+    Config::Pad_LeftStickClick.Locale = &g_Pad_LeftStickClick_locale;
+    Config::Pad_RightStickClick.Locale = &g_Pad_RightStickClick_locale;
+    Config::Pad_DPadUp.Locale = &g_Pad_DPadUp_locale;
+    Config::Pad_DPadDown.Locale = &g_Pad_DPadDown_locale;
+    Config::Pad_DPadLeft.Locale = &g_Pad_DPadLeft_locale;
+    Config::Pad_DPadRight.Locale = &g_Pad_DPadRight_locale;
 
     Config::GraphicsProfile.ApplyCallback = [](ConfigDef<EGraphicsProfile>* def)
     {
@@ -939,6 +994,9 @@ void Config::CreateCallbacks()
         os::macos::SetFullscreenMenuBar(def->Value);
     };
 #endif
+
+    Config::UseOfficialTitleOnTitleBar.Callback = [](ConfigDef<bool>* def) { GameWindow::SetTitle(); };
+    Config::UseAlternateTitle.Callback = [](ConfigDef<bool>* def) { GameWindow::SetTitle(); };
 }
 
 void Config::Load()

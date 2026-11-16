@@ -24,6 +24,9 @@ struct Video
     static void StartPipelinePrecompilation();
     static void WaitForGPU();
     static void ComputeViewportDimensions();
+
+    // Saves the next frame as a PNG (to ~/Pictures/Unleashed Recompiled on macOS).
+    static void RequestScreenshot();
 };
 
 struct GuestSamplerState

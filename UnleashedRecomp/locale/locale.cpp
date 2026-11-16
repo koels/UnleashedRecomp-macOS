@@ -105,6 +105,30 @@ std::unordered_map<std::string_view, std::unordered_map<ELanguage, std::string>>
         }
     },
     {
+        "Options_Desc_NotAvailableBackgroundInput",
+        {
+            { ELanguage::English, "This option is not available while Allow Background Input is on." }
+        }
+    },
+    {
+        "Options_ResetTab",
+        {
+            { ELanguage::English, "Reset Tab" }
+        }
+    },
+    {
+        "Options_Message_ResetTab",
+        {
+            { ELanguage::English, "Reset every option in this\ntab to its default?" }
+        }
+    },
+    {
+        "Options_Category_Codes",
+        {
+            { ELanguage::English, "TWEAKS" }
+        }
+    },
+    {
         // Notes: integer values in the options menu (e.g. FPS) when at their maximum value.
         "Options_Value_Max",
         {
